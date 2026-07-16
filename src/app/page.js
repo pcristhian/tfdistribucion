@@ -2,18 +2,28 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useLogin } from './login/hook/useLogin';
 
 export default function Home() {
+  const { getUser } = useLogin();
+  const router = useRouter();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [showButton, setShowButton] = useState(true); // Siempre visible
+  const [showButton, setShowButton] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+
+    // Verificar si el usuario ya está logueado
+    const user = getUser();
+    if (user) {
+      router.push('/dashboard');
+      return;
+    }
 
     // Detectar si ya está instalada (iOS)
     if (window.navigator.standalone) {
@@ -48,11 +58,10 @@ export default function Home() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
     };
-  }, []);
+  }, [getUser, router]);
 
   const handleInstall = async () => {
     if (!deferredPrompt) {
-      // Si no hay deferredPrompt, mostrar mensaje alternativo
       alert('Para instalar esta app:\n\n• En Android: Abre Chrome → Menú → "Instalar app"\n• En iOS: Safari → Compartir → "Agregar a pantalla de inicio"');
       return;
     }
@@ -74,7 +83,6 @@ export default function Home() {
     }
   };
 
-  // Elementos decorativos
   const decorativeElements = [
     { w: 80, h: 80, l: '15%', t: '10%', d: 12 },
     { w: 60, h: 60, l: '75%', t: '20%', d: 15 },
@@ -163,14 +171,7 @@ export default function Home() {
                 className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur-2xl opacity-20"
               />
               <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full p-6 shadow-2xl">
-                <Image
-                  className="dark:invert"
-                  src="/next.svg"
-                  alt="Torre Fuerte"
-                  width={80}
-                  height={80}
-                  priority
-                />
+                <span className="text-5xl">🏰</span>
               </div>
             </div>
           </motion.div>
@@ -233,7 +234,27 @@ export default function Home() {
             ))}
           </motion.div>
 
-          {/* BOTÓN DE INSTALACIÓN - SIEMPRE VISIBLE */}
+          {/* Botón para ir al login */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="flex flex-col items-center gap-4 w-full max-w-md"
+          >
+            <button
+              onClick={() => router.push('/login')}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-3 text-lg"
+            >
+              <span>🔐</span>
+              Iniciar Sesión
+            </button>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              ¿Ya tienes cuenta? Accede a tu panel
+            </p>
+          </motion.div>
+
+          {/* BOTÓN DE INSTALACIÓN */}
           {showButton && !isInstalled && (
             <motion.button
               onClick={handleInstall}
@@ -243,9 +264,8 @@ export default function Home() {
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, type: "spring", stiffness: 200, damping: 20 }}
-              className="relative group bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-5 px-16 rounded-full shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 transition-all duration-300 flex items-center gap-4 text-xl overflow-hidden"
+              className="relative group bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-5 px-16 rounded-full shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 transition-all duration-300 flex items-center gap-4 text-xl overflow-hidden mt-4"
             >
-              {/* Efecto de brillo */}
               <motion.div
                 initial={{ x: '-100%' }}
                 animate={{ x: isHovered ? '100%' : '-100%' }}
@@ -253,7 +273,6 @@ export default function Home() {
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
               />
 
-              {/* Icono de descarga animado */}
               <motion.svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-8 w-8"
@@ -273,7 +292,6 @@ export default function Home() {
 
               <span className="text-xl font-bold">📱 Instalar App</span>
 
-              {/* Badge de versión */}
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -291,14 +309,14 @@ export default function Home() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: "spring" }}
-              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-8 py-4 rounded-full shadow-lg flex items-center gap-3"
+              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-8 py-4 rounded-full shadow-lg flex items-center gap-3 mt-4"
             >
               <span className="text-3xl">✅</span>
               <span className="font-semibold text-lg">App instalada correctamente</span>
             </motion.div>
           )}
 
-          {/* Texto de ayuda para instalación */}
+          {/* Texto de ayuda */}
           {showButton && !isInstalled && (
             <motion.p
               initial={{ opacity: 0 }}
@@ -310,7 +328,7 @@ export default function Home() {
             </motion.p>
           )}
 
-          {/* Botón de prueba (para desarrollo) */}
+          {/* Botón de prueba */}
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
