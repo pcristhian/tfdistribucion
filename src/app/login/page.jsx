@@ -85,10 +85,6 @@ export default function LoginPage() {
                         )}
                     </button>
                 </form>
-
-                <p className="text-center text-sm text-gray-500 mt-4">
-                    Demo: juan / 123456
-                </p>
             </motion.div>
         </div>
     );
