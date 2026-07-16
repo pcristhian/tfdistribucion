@@ -44,14 +44,17 @@ export default function HomePage() {
     };
   }, []);
 
-  // Si ya está instalada, redirigir al login o dashboard
+  // ✅ SOLO redirigir si la app YA ESTÁ INSTALADA
   useEffect(() => {
     if (!loading && isInstalled) {
-      if (user) {
-        router.push('/dashboard');
-      } else {
-        router.push('/login');
-      }
+      // Pequeño delay para que se vea la transición
+      setTimeout(() => {
+        if (user) {
+          router.push('/dashboard');
+        } else {
+          router.push('/login');
+        }
+      }, 500);
     }
   }, [isInstalled, user, router, loading]);
 
@@ -63,107 +66,6 @@ export default function HomePage() {
         setIsInstalled(true);
       }
       setDeferredPrompt(null);
-    }
-  };
-
-  // Variants para animaciones
-  const containerVariants = {
-    hidden: { opacity: 0, scale: 0.9 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut",
-        staggerChildren: 0.2
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 30 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut"
-      }
-    }
-  };
-
-  const buttonVariants = {
-    idle: {
-      scale: 1,
-      boxShadow: "0 10px 30px -10px rgba(59, 130, 246, 0.3)"
-    },
-    hover: {
-      scale: 1.05,
-      boxShadow: "0 20px 40px -10px rgba(59, 130, 246, 0.5)",
-      transition: {
-        type: "spring",
-        stiffness: 400,
-        damping: 10
-      }
-    },
-    tap: {
-      scale: 0.95,
-      boxShadow: "0 5px 20px -10px rgba(59, 130, 246, 0.3)"
-    },
-    pulse: {
-      scale: [1, 1.02, 1],
-      boxShadow: [
-        "0 10px 30px -10px rgba(59, 130, 246, 0.3)",
-        "0 20px 50px -10px rgba(59, 130, 246, 0.6)",
-        "0 10px 30px -10px rgba(59, 130, 246, 0.3)"
-      ],
-      transition: {
-        duration: 2,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
-    }
-  };
-
-  const iconVariants = {
-    float: {
-      y: [0, -20, 0],
-      rotate: [0, 5, -5, 0],
-      transition: {
-        duration: 3,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
-    }
-  };
-
-  const floatingBubbleVariants = {
-    float1: {
-      y: [0, -30, 0],
-      x: [0, 20, -20, 0],
-      transition: {
-        duration: 8,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
-    },
-    float2: {
-      y: [0, 40, 0],
-      x: [0, -30, 30, 0],
-      transition: {
-        duration: 10,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
-    },
-    float3: {
-      y: [0, -25, 0],
-      x: [0, -15, 15, 0],
-      transition: {
-        duration: 7,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
     }
   };
 
@@ -180,7 +82,7 @@ export default function HomePage() {
     );
   }
 
-  // Si ya está instalada, no mostrar nada (redirige)
+  // Si ya está instalada, mostrar loading mientras redirige
   if (isInstalled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700">
@@ -189,6 +91,14 @@ export default function HomePage() {
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           className="rounded-full h-16 w-16 border-4 border-white border-t-transparent"
         />
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="text-white ml-4 text-lg font-medium"
+        >
+          Redirigiendo...
+        </motion.p>
       </div>
     );
   }
@@ -199,18 +109,39 @@ export default function HomePage() {
       {/* Fondo con burbujas animadas con Framer Motion */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
-          variants={floatingBubbleVariants}
-          animate="float1"
+          animate={{
+            y: [0, -30, 0],
+            x: [0, 20, -20, 0],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
           className="absolute -top-20 -left-20 w-72 h-72 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"
         />
         <motion.div
-          variants={floatingBubbleVariants}
-          animate="float2"
+          animate={{
+            y: [0, 40, 0],
+            x: [0, -30, 30, 0],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
           className="absolute -bottom-20 -right-20 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"
         />
         <motion.div
-          variants={floatingBubbleVariants}
-          animate="float3"
+          animate={{
+            y: [0, -25, 0],
+            x: [0, -15, 15, 0],
+          }}
+          transition={{
+            duration: 7,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
           className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl opacity-10"
         />
       </div>
@@ -218,50 +149,89 @@ export default function HomePage() {
       <AnimatePresence>
         {showContent && (
           <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              transition: {
+                duration: 0.6,
+                ease: "easeOut",
+                staggerChildren: 0.2
+              }
+            }}
             className="max-w-md w-full bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 text-center relative z-10"
           >
             {/* Icono con animación de flotación */}
             <motion.div
-              variants={iconVariants}
-              animate="float"
+              animate={{
+                y: [0, -20, 0],
+                rotate: [0, 5, -5, 0],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
               className="text-8xl mb-6 inline-block"
             >
               🏰
             </motion.div>
 
             <motion.h1
-              variants={itemVariants}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                transition: { delay: 0.2, duration: 0.5 }
+              }}
               className="text-4xl font-bold text-gray-800 mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
             >
               Torre Fuerte
             </motion.h1>
 
             <motion.p
-              variants={itemVariants}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                transition: { delay: 0.3, duration: 0.5 }
+              }}
               className="text-gray-600 mb-2 text-lg"
             >
               Instala la aplicación para continuar
             </motion.p>
 
             <motion.div
-              variants={itemVariants}
+              initial={{ opacity: 0, scaleX: 0 }}
+              animate={{
+                opacity: 1,
+                scaleX: 1,
+                transition: { delay: 0.4, duration: 0.5 }
+              }}
               className="h-1 w-20 bg-gradient-to-r from-blue-500 to-purple-500 mx-auto rounded-full mb-6"
             />
 
             <motion.p
-              variants={itemVariants}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                transition: { delay: 0.5, duration: 0.5 }
+              }}
               className="text-sm text-gray-400 mb-8"
             >
               Disfruta de una experiencia completa y sin interrupciones
             </motion.p>
 
-            {/* Botón de instalación - CON FRAMER MOTION */}
+            {/* Botón de instalación - ÚNICA OPCIÓN */}
             {isIOS ? (
               <motion.div
-                variants={itemVariants}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: { delay: 0.6, duration: 0.5 }
+                }}
                 className="space-y-4"
               >
                 <motion.div
@@ -297,16 +267,41 @@ export default function HomePage() {
               </motion.div>
             ) : (
               <motion.div
-                variants={itemVariants}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: { delay: 0.6, duration: 0.5 }
+                }}
                 className="space-y-4"
               >
                 {/* Botón principal con animaciones avanzadas */}
                 <motion.button
-                  variants={buttonVariants}
-                  initial="idle"
-                  animate={["idle", "pulse"]}
-                  whileHover="hover"
-                  whileTap="tap"
+                  whileHover={{
+                    scale: 1.05,
+                    boxShadow: "0 20px 40px -10px rgba(59, 130, 246, 0.5)"
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                  animate={{
+                    scale: [1, 1.02, 1],
+                    boxShadow: [
+                      "0 10px 30px -10px rgba(59, 130, 246, 0.3)",
+                      "0 20px 50px -10px rgba(59, 130, 246, 0.6)",
+                      "0 10px 30px -10px rgba(59, 130, 246, 0.3)"
+                    ]
+                  }}
+                  transition={{
+                    scale: {
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    },
+                    boxShadow: {
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }
+                  }}
                   onClick={handleInstall}
                   className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-5 rounded-xl font-bold text-lg relative overflow-hidden"
                 >
@@ -379,7 +374,11 @@ export default function HomePage() {
 
             {/* Botón para verificar si ya instaló */}
             <motion.button
-              variants={itemVariants}
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: 1,
+                transition: { delay: 0.8 }
+              }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => window.location.reload()}
