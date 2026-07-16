@@ -10,6 +10,7 @@ export default function HomePage() {
   const router = useRouter();
   const user = getUser();
   const [isInstalled, setIsInstalled] = useState(false);
+  const [wasInstalled, setWasInstalled] = useState(false); // ✅ NUEVO
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isIOS, setIsIOS] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -19,7 +20,6 @@ export default function HomePage() {
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setIsIOS(isIOSDevice);
 
-    // ✅ DETECTAR SI LA APP ESTÁ INSTALADA (standalone)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     setIsInstalled(isStandalone);
     setLoading(false);
@@ -32,8 +32,11 @@ export default function HomePage() {
     };
 
     window.addEventListener('beforeinstallprompt', handler);
+
+    // ✅ CUANDO SE INSTALA LA APP
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true);
+      setWasInstalled(true); // ✅ MARCAR QUE SE INSTALÓ
     });
 
     return () => {
@@ -41,18 +44,18 @@ export default function HomePage() {
     };
   }, []);
 
-  // ✅ SOLO REDIRIGIR SI ESTÁ INSTALADA
+  // ✅ SOLO REDIRIGIR SI ESTÁ INSTALADA Y NO SE ACABA DE INSTALAR
   useEffect(() => {
-    if (!loading && isInstalled) {
+    if (!loading && isInstalled && !wasInstalled) {
       setTimeout(() => {
         if (user) {
           router.push('/dashboard');
         } else {
-          router.push('/login'); // ✅ SOLO SE VE DESDE LA APP INSTALADA
+          router.push('/login');
         }
       }, 500);
     }
-  }, [isInstalled, user, router, loading]);
+  }, [isInstalled, wasInstalled, user, router, loading]);
 
   const handleInstall = async () => {
     if (deferredPrompt) {
@@ -60,6 +63,7 @@ export default function HomePage() {
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         setIsInstalled(true);
+        setWasInstalled(true); // ✅ MARCAR QUE SE INSTALÓ
       }
       setDeferredPrompt(null);
     }
@@ -77,7 +81,57 @@ export default function HomePage() {
     );
   }
 
-  // ✅ SI ESTÁ INSTALADA → REDIRIGE (NUNCA se ve el login aquí)
+  // ✅ SI SE ACABA DE INSTALAR → MOSTRAR MENSAJE DE ÉXITO
+  if (wasInstalled) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 0.5, repeat: 2 }}
+            className="text-7xl mb-6"
+          >
+            🎉
+          </motion.div>
+
+          <h2 className="text-2xl font-bold text-gray-800 mb-3">
+            ¡App instalada con éxito!
+          </h2>
+
+          <p className="text-gray-600 mb-6">
+            Ahora puedes abrir <strong>Torre Fuerte</strong> desde el ícono en tu pantalla de inicio.
+          </p>
+
+          <div className="bg-blue-50 rounded-xl p-4 mb-6 text-left">
+            <p className="text-sm text-blue-800 font-medium">📱 ¿Cómo abrir la app?</p>
+            <ul className="text-xs text-blue-700 mt-2 space-y-1">
+              <li>• Busca el ícono 🏰 en tu pantalla de inicio</li>
+              <li>• Toca el ícono para abrir la aplicación</li>
+              <li>• Inicia sesión y disfruta</li>
+            </ul>
+          </div>
+
+          <p className="text-xs text-gray-400">
+            Esta pantalla se cerrará automáticamente al abrir la app desde el ícono
+          </p>
+
+          <button
+            onClick={() => window.close()}
+            className="mt-4 text-xs text-blue-500 hover:text-blue-700"
+          >
+            Cerrar esta ventana
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ✅ SI ESTÁ INSTALADA DESDE ANTES → REDIRIGIR AL LOGIN/DASHBOARD
   if (isInstalled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700">
