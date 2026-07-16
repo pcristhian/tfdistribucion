@@ -10,15 +10,16 @@ export function useLogin() {
     const [error, setError] = useState('');
     const router = useRouter();
 
-    const login = async (email, password) => {
+    const login = async (usuario, password) => {
         setLoading(true);
         setError('');
 
         try {
+            // Buscar por usuario (no por email)
             const { data: user, error: userError } = await supabase
                 .from('usuarios')
-                .select('*')
-                .eq('email', email)
+                .select('id, usuario, nombre, password, rol, activo, distribucion')
+                .eq('usuario', usuario)
                 .eq('activo', true)
                 .single();
 
@@ -28,6 +29,7 @@ export function useLogin() {
                 return false;
             }
 
+            // Verificar contraseña
             const passwordMatch = await bcrypt.compare(password, user.password);
 
             if (!passwordMatch) {
@@ -36,6 +38,7 @@ export function useLogin() {
                 return false;
             }
 
+            // Guardar sesión (sin la contraseña)
             const { password: _, ...userWithoutPassword } = user;
             localStorage.setItem('distribuidor_user', JSON.stringify(userWithoutPassword));
 

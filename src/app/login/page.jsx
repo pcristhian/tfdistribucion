@@ -5,13 +5,13 @@ import { motion } from 'framer-motion';
 import { useLogin } from './hook/useLogin';
 
 export default function LoginPage() {
-    const [email, setEmail] = useState('');
+    const [usuario, setUsuario] = useState('');
     const [password, setPassword] = useState('');
     const { login, loading, error } = useLogin();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        await login(email, password);
+        await login(usuario, password);
     };
 
     return (
@@ -32,14 +32,14 @@ export default function LoginPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Email
+                            Usuario
                         </label>
                         <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            type="text"
+                            value={usuario}
+                            onChange={(e) => setUsuario(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="distribuidor@email.com"
+                            placeholder="juan"
                             required
                             disabled={loading}
                         />
@@ -87,7 +87,7 @@ export default function LoginPage() {
                 </form>
 
                 <p className="text-center text-sm text-gray-500 mt-4">
-                    Demo: distribuidor@email.com / password123
+                    Demo: juan / 123456
                 </p>
             </motion.div>
         </div>
