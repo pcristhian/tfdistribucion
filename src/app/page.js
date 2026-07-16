@@ -16,11 +16,10 @@ export default function HomePage() {
   const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
-    // Detectar iOS
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setIsIOS(isIOSDevice);
 
-    // Verificar si la app ya está instalada (standalone)
+    // ✅ DETECTAR SI LA APP ESTÁ INSTALADA (standalone)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     setIsInstalled(isStandalone);
     setLoading(false);
@@ -42,14 +41,14 @@ export default function HomePage() {
     };
   }, []);
 
-  // ✅ SOLO redirigir si la app ESTÁ INSTALADA
+  // ✅ SOLO REDIRIGIR SI ESTÁ INSTALADA
   useEffect(() => {
     if (!loading && isInstalled) {
       setTimeout(() => {
         if (user) {
           router.push('/dashboard');
         } else {
-          router.push('/login');
+          router.push('/login'); // ✅ SOLO SE VE DESDE LA APP INSTALADA
         }
       }, 500);
     }
@@ -66,7 +65,6 @@ export default function HomePage() {
     }
   };
 
-  // Loading
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700">
@@ -79,7 +77,7 @@ export default function HomePage() {
     );
   }
 
-  // ✅ SI ESTÁ INSTALADA → Redirigir (NUNCA mostrar el login aquí)
+  // ✅ SI ESTÁ INSTALADA → REDIRIGE (NUNCA se ve el login aquí)
   if (isInstalled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700">
@@ -100,9 +98,10 @@ export default function HomePage() {
     );
   }
 
-  // ✅ SOLO mostrar pantalla de instalación si NO está instalada
+  // ✅ SOLO PANTALLA DE INSTALACIÓN (NAVEGADOR NORMAL)
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Burbujas de fondo */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
           animate={{ y: [0, -30, 0], x: [0, 20, -20, 0] }}
