@@ -7,7 +7,7 @@ import Image from 'next/image';
 export default function Home() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [showButton, setShowButton] = useState(false);
+  const [showButton, setShowButton] = useState(true); // Siempre visible
   const [isHovered, setIsHovered] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -15,11 +15,14 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true);
 
+    // Detectar si ya está instalada (iOS)
     if (window.navigator.standalone) {
       setIsInstalled(true);
+      setShowButton(false);
       return;
     }
 
+    // Escuchar el evento beforeinstallprompt (Android/Chrome)
     const handler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -27,6 +30,8 @@ export default function Home() {
     };
 
     window.addEventListener('beforeinstallprompt', handler);
+
+    // Detectar cuando se instala
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true);
       setShowButton(false);
@@ -34,13 +39,23 @@ export default function Home() {
       setTimeout(() => setShowNotification(false), 5000);
     });
 
+    // Verificar si ya está instalada (Chrome)
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+      setShowButton(false);
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
     };
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      // Si no hay deferredPrompt, mostrar mensaje alternativo
+      alert('Para instalar esta app:\n\n• En Android: Abre Chrome → Menú → "Instalar app"\n• En iOS: Safari → Compartir → "Agregar a pantalla de inicio"');
+      return;
+    }
 
     try {
       await deferredPrompt.prompt();
@@ -59,7 +74,7 @@ export default function Home() {
     }
   };
 
-  // Elementos decorativos con valores fijos
+  // Elementos decorativos
   const decorativeElements = [
     { w: 80, h: 80, l: '15%', t: '10%', d: 12 },
     { w: 60, h: 60, l: '75%', t: '20%', d: 15 },
@@ -98,7 +113,7 @@ export default function Home() {
 
       <main className="flex flex-col items-center justify-center min-h-screen px-4 relative">
 
-        {/* Elementos decorativos flotantes - solo en cliente */}
+        {/* Elementos decorativos */}
         {isMounted && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {decorativeElements.map((el, i) => (
@@ -193,7 +208,8 @@ export default function Home() {
             transition={{ delay: 0.8 }}
             className="text-center text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-8 px-4"
           >
-            La mejor plataforma para la distribución de torres fuertes. Instala nuestra app y lleva el control donde quieras.
+            La mejor plataforma para la distribución de torres fuertes.
+            Instala nuestra app y lleva el control donde quieras.
           </motion.p>
 
           {/* Características */}
@@ -217,8 +233,8 @@ export default function Home() {
             ))}
           </motion.div>
 
-          {/* Botón de instalación */}
-          {!isInstalled && showButton && (
+          {/* BOTÓN DE INSTALACIÓN - SIEMPRE VISIBLE */}
+          {showButton && !isInstalled && (
             <motion.button
               onClick={handleInstall}
               onHoverStart={() => setIsHovered(true)}
@@ -226,8 +242,8 @@ export default function Home() {
               whileTap={{ scale: 0.95 }}
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1, type: "spring", stiffness: 200, damping: 20 }}
-              className="relative group bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-12 rounded-full shadow-2xl shadow-blue-500/30 transition-all duration-300 flex items-center gap-3 text-xl overflow-hidden"
+              transition={{ delay: 0.5, type: "spring", stiffness: 200, damping: 20 }}
+              className="relative group bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-5 px-16 rounded-full shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 transition-all duration-300 flex items-center gap-4 text-xl overflow-hidden"
             >
               {/* Efecto de brillo */}
               <motion.div
@@ -237,14 +253,14 @@ export default function Home() {
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
               />
 
-              {/* Icono de descarga */}
+              {/* Icono de descarga animado */}
               <motion.svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-7 w-7"
+                className="h-8 w-8"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
-                animate={{ y: [0, -5, 0] }}
+                animate={{ y: [0, -8, 0] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
               >
                 <path
@@ -255,14 +271,14 @@ export default function Home() {
                 />
               </motion.svg>
 
-              <span>Instalar App</span>
+              <span className="text-xl font-bold">📱 Instalar App</span>
 
-              {/* Badge */}
+              {/* Badge de versión */}
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ delay: 1.2, type: "spring" }}
-                className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg shadow-green-500/30"
+                transition={{ delay: 0.8, type: "spring" }}
+                className="absolute -top-3 -right-3 bg-green-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg shadow-green-500/40 font-bold"
               >
                 v2.0
               </motion.span>
@@ -275,14 +291,26 @@ export default function Home() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: "spring" }}
-              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-6 py-3 rounded-full shadow-lg flex items-center gap-2"
+              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-8 py-4 rounded-full shadow-lg flex items-center gap-3"
             >
-              <span className="text-2xl">✅</span>
-              <span className="font-semibold">App instalada correctamente</span>
+              <span className="text-3xl">✅</span>
+              <span className="font-semibold text-lg">App instalada correctamente</span>
             </motion.div>
           )}
 
-          {/* Botón de prueba */}
+          {/* Texto de ayuda para instalación */}
+          {showButton && !isInstalled && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs"
+            >
+              💡 Haz clic en el botón para instalar la app en tu dispositivo
+            </motion.p>
+          )}
+
+          {/* Botón de prueba (para desarrollo) */}
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -292,11 +320,12 @@ export default function Home() {
             onClick={() => {
               if (!showButton) {
                 setShowButton(true);
+                setIsInstalled(false);
               }
             }}
-            className="mt-6 text-sm text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 underline-offset-2 hover:underline transition-colors bg-white/50 dark:bg-gray-800/50 px-4 py-2 rounded-full backdrop-blur-sm"
+            className="mt-8 text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 underline-offset-2 hover:underline transition-colors bg-white/50 dark:bg-gray-800/50 px-4 py-2 rounded-full backdrop-blur-sm"
           >
-            {showButton ? '🔄 Modo prueba' : '🔧 Mostrar botón (test)'}
+            {showButton ? '🔄 Modo prueba (reiniciar)' : '🔧 Mostrar botón'}
           </motion.button>
 
         </motion.div>
