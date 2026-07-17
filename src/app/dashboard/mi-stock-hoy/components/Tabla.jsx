@@ -1,39 +1,116 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
 
 export default function Tabla({
-    stockData = [],
+    initialStockData = null,
     loading = false,
-    onUpdateStock,
     diaSeleccionado = null,
     productosDisponibles = [],
+    esPasado = false,
+    distribuidorId = null,
+    onUpdateStock = null,
 }) {
-    const [updatingStock, setUpdatingStock] = useState(false);
-    const [localStockData, setLocalStockData] = useState([]);
+    // ✅ Estado local - NUNCA se recarga desde el padre
+    const [localProductos, setLocalProductos] = useState([]);
+    const [inputValues, setInputValues] = useState({});
+    const saveTimeoutRef = useRef({});
+    const isSavingRef = useRef(false);
+    const diaActualRef = useRef(diaSeleccionado);
+    const initializadoRef = useRef(false);
 
-    // Sincronizar stockData con estado local cuando cambie
+    // ✅ SOLO se inicializa UNA VEZ al montar o cuando cambia el día
     useEffect(() => {
-        setLocalStockData(stockData);
-    }, [stockData]);
+        if (diaSeleccionado !== diaActualRef.current || !initializadoRef.current) {
+            diaActualRef.current = diaSeleccionado;
+            initializadoRef.current = true;
 
-    // Ordenar: Viva → Entel → Tigo (tarjetas) y luego Entel → Viva → Tigo (chips)
+            if (initialStockData) {
+                const productosData = initialStockData.productos || [];
+                setLocalProductos(productosData);
+
+                const newValues = {};
+                productosData.forEach(item => {
+                    const hasValidStock = item.stock_inicial !== null &&
+                        item.stock_inicial !== undefined &&
+                        item.stock_inicial > 0;
+                    newValues[item.producto_id] = hasValidStock ? item.stock_inicial : null;
+                });
+                setInputValues(newValues);
+            } else {
+                setLocalProductos([]);
+                setInputValues({});
+            }
+        }
+    }, [diaSeleccionado, initialStockData]);
+
+    // ✅ Guardar stock en segundo plano (SIN recargar)
+    const guardarStock = useCallback(async (productoId, nuevoStock) => {
+        if (esPasado) return;
+        if (isSavingRef.current) return;
+        if (!onUpdateStock) return;
+
+        const stockParaBD = nuevoStock === null || nuevoStock === '' ? 0 : parseInt(nuevoStock) || 0;
+
+        isSavingRef.current = true;
+        try {
+            await onUpdateStock(distribuidorId, productoId, stockParaBD);
+        } catch (error) {
+            console.error('❌ Error al guardar stock:', error);
+        } finally {
+            isSavingRef.current = false;
+        }
+    }, [esPasado, onUpdateStock, distribuidorId]);
+
+    // Manejar cambio en input
+    const handleInputChange = useCallback((item, value) => {
+        if (esPasado) return;
+
+        const rawValue = value === '' ? null : parseInt(value) || 0;
+        const key = item.producto_id || item.id;
+        const finalValue = rawValue === 0 ? null : rawValue;
+
+        // ✅ Actualizar input localmente
+        setInputValues(prev => ({
+            ...prev,
+            [key]: finalValue
+        }));
+
+        // ✅ Actualizar el producto localmente
+        setLocalProductos(prev =>
+            prev.map(p =>
+                p.producto_id === key
+                    ? { ...p, stock_inicial: finalValue, stock_actual: finalValue }
+                    : p
+            )
+        );
+
+        if (finalValue === null) {
+            return;
+        }
+
+        if (saveTimeoutRef.current[key]) {
+            clearTimeout(saveTimeoutRef.current[key]);
+        }
+
+        saveTimeoutRef.current[key] = setTimeout(async () => {
+            await guardarStock(key, finalValue);
+        }, 500);
+
+    }, [esPasado, guardarStock]);
+
+    // Ordenar productos
     const ordenarProductos = useCallback((data) => {
         const ordenTarjetas = ['Viva', 'Entel', 'Tigo'];
         const ordenChips = ['Entel', 'Viva', 'Tigo'];
 
         return [...data].sort((a, b) => {
-            const empresaA = a.producto?.empresa?.nombre || a.empresa?.nombre || '';
-            const empresaB = b.producto?.empresa?.nombre || b.empresa?.nombre || '';
+            const empresaA = a.empresa || '';
+            const empresaB = b.empresa || '';
 
-            const esChipA = a.producto?.categoria?.nombre?.toLowerCase() === 'chip' ||
-                a.producto?.nombre?.toLowerCase().includes('chip') ||
-                a.nombre?.toLowerCase().includes('chip');
-            const esChipB = b.producto?.categoria?.nombre?.toLowerCase() === 'chip' ||
-                b.producto?.nombre?.toLowerCase().includes('chip') ||
-                b.nombre?.toLowerCase().includes('chip');
+            const esChipA = a.nombre?.toLowerCase().includes('chip') || false;
+            const esChipB = b.nombre?.toLowerCase().includes('chip') || false;
 
             if (esChipA && !esChipB) return 1;
             if (!esChipA && esChipB) return -1;
@@ -42,74 +119,60 @@ export default function Tabla({
                 const indexA = ordenChips.indexOf(empresaA);
                 const indexB = ordenChips.indexOf(empresaB);
                 if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                return (a.producto?.nombre || a.nombre || '').localeCompare(b.producto?.nombre || b.nombre || '');
+                return (a.nombre || '').localeCompare(b.nombre || '');
             }
 
             const indexA = ordenTarjetas.indexOf(empresaA);
             const indexB = ordenTarjetas.indexOf(empresaB);
             if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            return (a.producto?.nombre || a.nombre || '').localeCompare(b.producto?.nombre || b.nombre || '');
+            return (a.nombre || '').localeCompare(b.nombre || '');
         });
     }, []);
 
-    // Calcular total en Bs de ventas
-    const calcularTotalBs = useCallback((item) => {
-        const stockInicial = item.stock_inicial || 0;
-        const stockActual = item.stock_actual || 0;
-        const vendidos = stockInicial - stockActual;
-        const precio = item.producto?.precio_base || item.precio_base || 0;
-        return vendidos * precio;
-    }, []);
-
-    // Calcular ventas en unidades
-    const calcularVentas = useCallback((item) => {
-        const stockInicial = item.stock_inicial || 0;
-        const stockActual = item.stock_actual || 0;
-        return stockInicial - stockActual;
-    }, []);
-
-    // ✅ Combinar productos con stock usando useMemo
+    // ✅ Combinar productos disponibles con el stock local (useMemo)
     const combinedData = useMemo(() => {
         if (!productosDisponibles || productosDisponibles.length === 0) {
             return [];
         }
 
         const stockMap = {};
-        localStockData.forEach(item => {
-            stockMap[item.producto_id] = {
-                ...item,
-                producto: item.producto || productosDisponibles.find(p => p.id === item.producto_id)
-            };
+        localProductos.forEach(item => {
+            stockMap[item.producto_id] = item;
         });
 
-        const combined = productosDisponibles.map(producto => {
+        return productosDisponibles.map(producto => {
             const stock = stockMap[producto.id];
             if (stock) {
-                return stock;
-            } else {
                 return {
-                    id: null,
+                    ...stock,
                     producto_id: producto.id,
                     producto: producto,
-                    stock_inicial: 0,
-                    stock_actual: 0,
-                    stock_final: 0,
-                    distribuidor_id: null,
-                    fecha: diaSeleccionado || new Date().toISOString().split('T')[0],
+                };
+            } else {
+                return {
+                    producto_id: producto.id,
+                    producto: producto,
+                    codigo: producto.codigo || '',
+                    nombre: producto.nombre || '',
+                    stock_inicial: null,
+                    stock_actual: null,
+                    stock_final: null,
+                    precio_base: producto.precio_base || 0,
+                    empresa: producto.empresa?.nombre || '',
+                    empresa_color: producto.empresa?.color_primario || '#6366f1',
+                    id: null,
                 };
             }
         });
+    }, [productosDisponibles, localProductos]);
 
-        return combined;
-    }, [productosDisponibles, localStockData, diaSeleccionado]);
-
-    // ✅ Ordenar datos con useMemo (sin filtro)
+    // ✅ Ordenar datos
     const filteredData = useMemo(() => {
         if (combinedData.length === 0) return [];
         return ordenarProductos(combinedData);
     }, [combinedData, ordenarProductos]);
 
-    // ✅ Calcular totales con useMemo
+    // ✅ Calcular totales
     const totales = useMemo(() => {
         let totalTarjetas = 0;
         let totalChips = 0;
@@ -117,17 +180,21 @@ export default function Tabla({
         let totalEfectivo = 0;
 
         filteredData.forEach(item => {
-            const totalBs = calcularTotalBs(item);
-            const ventas = calcularVentas(item);
-            const esChip = item.producto?.categoria?.nombre?.toLowerCase() === 'chip' ||
-                item.producto?.nombre?.toLowerCase().includes('chip');
+            if (item.stock_inicial !== null && item.stock_inicial !== undefined && item.stock_inicial > 0) {
+                const stockInicial = item.stock_inicial || 0;
+                const stockActual = item.stock_actual || 0;
+                const vendidos = stockInicial - stockActual;
+                const precio = item.precio_base || 0;
+                const totalBs = vendidos * precio;
+                const esChip = item.nombre?.toLowerCase().includes('chip') || false;
 
-            totalVentasUnidades += ventas;
-            totalEfectivo += totalBs;
-            if (esChip) {
-                totalChips += totalBs;
-            } else {
-                totalTarjetas += totalBs;
+                totalVentasUnidades += vendidos;
+                totalEfectivo += totalBs;
+                if (esChip) {
+                    totalChips += totalBs;
+                } else {
+                    totalTarjetas += totalBs;
+                }
             }
         });
 
@@ -138,73 +205,7 @@ export default function Tabla({
             totalVentasUnidades,
             totalEfectivo,
         };
-    }, [filteredData, calcularTotalBs, calcularVentas]);
-
-    // ✅ Actualizar stock inicial automáticamente
-    const handleStockChange = useCallback(async (item, newValue) => {
-        const newStock = parseInt(newValue) || 0;
-        if (newStock < 0) return;
-
-        setUpdatingStock(true);
-        try {
-            if (item.id) {
-                const { error } = await supabase
-                    .from('stock_diario')
-                    .update({
-                        stock_inicial: newStock,
-                        stock_actual: newStock,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq('id', item.id);
-
-                if (error) throw error;
-
-                setLocalStockData(prev =>
-                    prev.map(d =>
-                        d.id === item.id
-                            ? { ...d, stock_inicial: newStock, stock_actual: newStock }
-                            : d
-                    )
-                );
-
-                if (onUpdateStock) {
-                    onUpdateStock(item.id, newStock);
-                }
-            } else {
-                const fecha = diaSeleccionado || new Date().toISOString().split('T')[0];
-                const { data, error } = await supabase
-                    .from('stock_diario')
-                    .insert([{
-                        distribuidor_id: item.distribuidor_id,
-                        producto_id: item.producto_id,
-                        fecha: fecha,
-                        stock_inicial: newStock,
-                        stock_actual: newStock,
-                        stock_final: 0,
-                    }])
-                    .select()
-                    .single();
-
-                if (error) throw error;
-
-                setLocalStockData(prev => [
-                    ...prev,
-                    {
-                        ...data,
-                        producto: item.producto,
-                    }
-                ]);
-
-                if (onUpdateStock) {
-                    onUpdateStock(data.id, newStock);
-                }
-            }
-        } catch (error) {
-            console.error('Error al actualizar stock:', error);
-        } finally {
-            setUpdatingStock(false);
-        }
-    }, [diaSeleccionado, onUpdateStock]);
+    }, [filteredData]);
 
     const formatPrice = (value) => {
         return `Bs. ${parseFloat(value || 0).toFixed(2)}`;
@@ -212,6 +213,12 @@ export default function Tabla({
 
     const formatNumber = (value) => {
         return parseInt(value || 0).toLocaleString('es-BO');
+    };
+
+    const getDisplayValue = (key) => {
+        const val = inputValues[key];
+        if (val === null || val === undefined || val === 0) return '';
+        return val;
     };
 
     if (loading) {
@@ -236,25 +243,24 @@ export default function Tabla({
 
     return (
         <div className="space-y-4">
-            {/* Tabla de stock - SOLO CÓDIGO */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Código
-                                </th>
-                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-1 text-center text-xs font-medium text-gray-500 tracking-wider">
                                     Stock Inicial
                                 </th>
-                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-1 text-left text-xs font-medium text-gray-500 tracking-wider">
+                                    Cod
+                                </th>
+                                <th className="px-4 py-1 text-center text-xs font-medium text-gray-500 tracking-wider">
                                     Stock Final
                                 </th>
-                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Ventas (Und)
+                                <th className="px-4 py-1 text-center text-xs font-medium text-gray-500 tracking-wider">
+                                    Ventas
                                 </th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-1 text-right text-xs font-medium text-gray-500 tracking-wider">
                                     Total Bs.
                                 </th>
                             </tr>
@@ -265,40 +271,51 @@ export default function Tabla({
                                     const stockInicial = item.stock_inicial || 0;
                                     const stockFinal = item.stock_actual || 0;
                                     const vendidos = stockInicial - stockFinal;
-                                    const totalBs = calcularTotalBs(item);
+                                    const totalBs = vendidos * (item.precio_base || 0);
                                     const tieneId = !!item.id;
+                                    const key = item.producto_id || item.id;
+                                    const displayValue = getDisplayValue(key);
 
                                     return (
                                         <motion.tr
-                                            key={item.id || `new-${item.producto_id}`}
+                                            key={key}
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: index * 0.03 }}
                                             className={`hover:bg-gray-50 transition-colors ${!tieneId ? 'bg-yellow-50/30' : ''}`}
                                         >
-                                            <td className="px-4 py-3 font-mono text-xs font-medium text-gray-700">
-                                                {item.producto?.codigo || '-'}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
+                                            <td className="px-4 py-1 text-center text-black">
                                                 <input
                                                     type="number"
-                                                    value={stockInicial}
-                                                    onChange={(e) => handleStockChange(item, e.target.value)}
-                                                    className={`w-24 px-2 py-1 text-center border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-medium ${!tieneId ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300'}`}
+                                                    value={displayValue}
+                                                    onChange={(e) => handleInputChange(item, e.target.value)}
+                                                    className={`w-24 px-2 py-1 text-center border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-medium ${esPasado
+                                                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200'
+                                                        : !tieneId
+                                                            ? 'border-yellow-400 bg-yellow-50'
+                                                            : 'border-gray-300'
+                                                        }`}
                                                     min="0"
-                                                    disabled={updatingStock}
-                                                    placeholder="0"
+                                                    disabled={esPasado}
+                                                    placeholder="-"
+                                                    readOnly={esPasado}
                                                 />
+                                                {esPasado && (
+                                                    <span className="ml-1 text-xs text-gray-400">🔒</span>
+                                                )}
                                             </td>
-                                            <td className="px-4 py-3 text-center font-medium text-gray-700">
+                                            <td className="px-4 py-1 font-mono text-xs font-medium text-gray-700">
+                                                {item.codigo || '-'}
+                                            </td>
+                                            <td className="px-4 py-1 text-center font-medium text-gray-700">
                                                 {formatNumber(stockFinal)}
                                             </td>
-                                            <td className="px-4 py-3 text-center">
+                                            <td className="px-4 py-1 text-center">
                                                 <span className={`font-medium ${vendidos > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                                                     {formatNumber(vendidos)}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                                            <td className="px-4 py-1 text-right font-semibold text-blue-600">
                                                 {formatPrice(totalBs)}
                                             </td>
                                         </motion.tr>
@@ -328,6 +345,9 @@ export default function Tabla({
                                         {filteredData.some(item => !item.id) && (
                                             <span className="text-yellow-600">⚠️ Sin stock inicial</span>
                                         )}
+                                        {esPasado && (
+                                            <span className="text-gray-400">🔒 Día pasado - Solo lectura</span>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -355,14 +375,17 @@ export default function Tabla({
                         <span className="text-gray-700">Total Efectivo:</span>
                         <span className="text-blue-600">{formatPrice(totales.totalEfectivo)}</span>
                     </div>
+                    {esPasado && (
+                        <div className="text-center text-xs text-gray-400 pt-1">🔒 Día pasado - Solo lectura</div>
+                    )}
                 </div>
             </div>
 
             {/* Mensaje si no hay stock inicial */}
-            {filteredData.some(item => !item.id) && (
+            {filteredData.some(item => !item.id) && !esPasado && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm text-yellow-700">
                     ⚠️ Los productos marcados como <strong>"Nuevo"</strong> no tienen stock registrado.
-                    Ingresa un valor en <strong>"Stock Inicial"</strong> para guardarlos.
+                    Ingresa un valor en <strong>"Stock Inicial"</strong> para guardarlos automáticamente.
                 </div>
             )}
         </div>

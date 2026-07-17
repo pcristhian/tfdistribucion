@@ -18,30 +18,30 @@ export default function MiStockHoyPage() {
         loading: stockLoading,
         error,
         getStockPorFecha,
-        crearVenta,
-        anularVenta,
         getStockHoy,
+        abrirDia,
+        actualizarStockProducto,
+        cerrarDia,
     } = useStockDiario();
 
     const { getProductos } = useEditProductos();
 
-    const [stockData, setStockData] = useState([]);
+    const [stockData, setStockData] = useState(null);
     const [productos, setProductos] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [diaSeleccionado, setDiaSeleccionado] = useState(null);
     const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
-    const [showModalVenta, setShowModalVenta] = useState(false);
-    const [productoSeleccionado, setProductoSeleccionado] = useState(null);
-    const [cantidadVenta, setCantidadVenta] = useState(1);
     const [mostrarCalendario, setMostrarCalendario] = useState(true);
     const [productosCargados, setProductosCargados] = useState(false);
+    const [abriendoDia, setAbriendoDia] = useState(false);
+    const [diaActivo, setDiaActivo] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const isFirstRender = useRef(true);
 
-    // Cargar productos disponibles
     const cargarProductos = useCallback(async () => {
         try {
-            const data = await getProductos(false); // Obtener todos (activos e inactivos)
+            const data = await getProductos(false);
             if (data && data.length > 0) {
                 setProductos(data);
             }
@@ -52,13 +52,19 @@ export default function MiStockHoyPage() {
         }
     }, [getProductos]);
 
-    // Cargar datos del stock por fecha
     const cargarStockPorFecha = useCallback(async (fecha) => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
             const data = await getStockPorFecha(user.id, fecha);
-            setStockData(data || []);
+            setStockData(data);
+            setRefreshKey(prev => prev + 1);
+
+            if (data?.estado === 'activo') {
+                setDiaActivo(true);
+            } else {
+                setDiaActivo(false);
+            }
         } catch (error) {
             console.error('Error al cargar stock:', error);
         } finally {
@@ -66,13 +72,19 @@ export default function MiStockHoyPage() {
         }
     }, [user?.id, getStockPorFecha]);
 
-    // Cargar stock del día actual
     const cargarStockHoy = useCallback(async () => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
             const data = await getStockHoy(user.id);
-            setStockData(data || []);
+            setStockData(data);
+            setRefreshKey(prev => prev + 1);
+
+            if (data?.estado === 'activo') {
+                setDiaActivo(true);
+            } else {
+                setDiaActivo(false);
+            }
         } catch (error) {
             console.error('Error al cargar stock del día:', error);
         } finally {
@@ -80,7 +92,15 @@ export default function MiStockHoyPage() {
         }
     }, [user?.id, getStockHoy]);
 
-    // Manejar selección de día
+    const esPasado = useCallback(() => {
+        if (!fechaSeleccionada) return false;
+        const fecha = new Date(fechaSeleccionada);
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        fecha.setHours(0, 0, 0, 0);
+        return fecha < hoy;
+    }, [fechaSeleccionada]);
+
     const handleSelectDia = useCallback((fecha, tieneDatos) => {
         setFechaSeleccionada(fecha);
         setDiaSeleccionado(fecha);
@@ -88,31 +108,99 @@ export default function MiStockHoyPage() {
         if (tieneDatos) {
             cargarStockPorFecha(fecha);
         } else {
-            // Si no tiene datos, mostrar tabla vacía pero con productos
-            setStockData([]);
+            setStockData(null);
+            setRefreshKey(prev => prev + 1);
+            setDiaActivo(false);
             setIsLoading(false);
         }
     }, [cargarStockPorFecha]);
 
-    // Volver al calendario
     const handleVolverCalendario = useCallback(() => {
         setMostrarCalendario(true);
         setDiaSeleccionado(null);
         setFechaSeleccionada(null);
-        setStockData([]);
+        setStockData(null);
+        setDiaActivo(false);
         setIsLoading(false);
     }, []);
 
-    // Manejar actualización de stock (desde input editable)
-    const handleUpdateStock = useCallback(async (stockId, nuevoStock) => {
-        if (fechaSeleccionada) {
-            await cargarStockPorFecha(fechaSeleccionada);
-        } else {
-            await cargarStockHoy();
-        }
-    }, [fechaSeleccionada, cargarStockPorFecha, cargarStockHoy]);
+    const puedeAbrirDia = useCallback(() => {
+        if (!fechaSeleccionada) return false;
+        const fecha = new Date(fechaSeleccionada);
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        fecha.setHours(0, 0, 0, 0);
+        return fecha >= hoy;
+    }, [fechaSeleccionada]);
 
-    // Verificar autenticación y cargar datos
+    const handleAbrirDia = useCallback(async () => {
+        if (!user?.id || !fechaSeleccionada) return;
+
+        if (diaActivo) {
+            alert('⚠️ Ya hay un día activo. Cierra el día actual antes de abrir otro.');
+            return;
+        }
+
+        setAbriendoDia(true);
+        try {
+            const productosStock = productos.map(p => ({
+                producto_id: p.id,
+                codigo: p.codigo || '',
+                nombre: p.nombre || '',
+                stock_inicial: 0,
+                precio_base: p.precio_base || 0,
+                empresa: p.empresa?.nombre || '',
+                empresa_color: p.empresa?.color_primario || '#6366f1',
+            }));
+
+            const result = await abrirDia(user.id, productosStock, fechaSeleccionada);
+            if (result) {
+                alert('✅ Día abierto correctamente.');
+                await cargarStockPorFecha(fechaSeleccionada);
+                setDiaActivo(true);
+            }
+        } catch (error) {
+            console.error('Error al abrir día:', error);
+            alert('❌ Error al abrir el día');
+        } finally {
+            setAbriendoDia(false);
+        }
+    }, [user?.id, fechaSeleccionada, productos, diaActivo, abrirDia, cargarStockPorFecha]);
+
+    const handleCerrarDia = useCallback(async () => {
+        if (!user?.id || !fechaSeleccionada) return;
+
+        if (!diaActivo) {
+            alert('⚠️ No hay un día activo para cerrar.');
+            return;
+        }
+
+        if (confirm('¿Estás seguro de cerrar el día?')) {
+            try {
+                const result = await cerrarDia(user.id);
+                if (result) {
+                    alert('✅ Día cerrado correctamente.');
+                    setDiaActivo(false);
+                    await cargarStockPorFecha(fechaSeleccionada);
+                }
+            } catch (error) {
+                console.error('Error al cerrar día:', error);
+                alert('❌ Error al cerrar el día');
+            }
+        }
+    }, [user?.id, fechaSeleccionada, diaActivo, cerrarDia, cargarStockPorFecha]);
+
+    // ✅ SOLO GUARDA - NO RECARGA
+    const handleUpdateStock = useCallback(async (distribuidorId, productoId, nuevoStock) => {
+        if (!distribuidorId || !productoId) return;
+        try {
+            return await actualizarStockProducto(distribuidorId, productoId, nuevoStock);
+        } catch (error) {
+            console.error('Error al actualizar stock:', error);
+            return null;
+        }
+    }, [actualizarStockProducto]);
+
     useEffect(() => {
         if (!user) {
             router.push('/login');
@@ -125,75 +213,11 @@ export default function MiStockHoyPage() {
         }
     }, [user, router, cargarProductos]);
 
-    // Cargar stock del día actual después de cargar productos
     useEffect(() => {
         if (productosCargados && mostrarCalendario) {
             cargarStockHoy();
         }
     }, [productosCargados, mostrarCalendario, cargarStockHoy]);
-
-    // Manejar venta
-    const handleVender = useCallback((item) => {
-        if (!item.id) {
-            alert('⚠️ Este producto no tiene stock registrado. Ingresa un stock inicial primero.');
-            return;
-        }
-        if (item.stock_actual <= 0) {
-            alert('⚠️ No hay stock disponible para este producto.');
-            return;
-        }
-        setProductoSeleccionado(item);
-        setCantidadVenta(1);
-        setShowModalVenta(true);
-    }, []);
-
-    // Confirmar venta
-    const handleConfirmarVenta = useCallback(async () => {
-        if (!productoSeleccionado || cantidadVenta <= 0) {
-            alert('Cantidad inválida');
-            return;
-        }
-
-        if (cantidadVenta > productoSeleccionado.stock_actual) {
-            alert(`Stock insuficiente. Disponible: ${productoSeleccionado.stock_actual}`);
-            return;
-        }
-
-        const precio = productoSeleccionado.producto?.precio_base || 0;
-        const total = precio * cantidadVenta;
-
-        const ventaData = {
-            distribuidor_id: user.id,
-            cliente_id: null, // Puede ser null si es venta sin cliente
-            producto_id: productoSeleccionado.producto_id,
-            stock_diario_id: productoSeleccionado.id,
-            cantidad: cantidadVenta,
-            subtotal: total,
-            descuento_total: 0,
-            total: total,
-            observacion: `Venta de ${cantidadVenta} x ${productoSeleccionado.producto?.nombre}`,
-        };
-
-        const result = await crearVenta(ventaData);
-        if (result) {
-            setShowModalVenta(false);
-            setProductoSeleccionado(null);
-            setCantidadVenta(1);
-            // Recargar stock
-            if (fechaSeleccionada) {
-                await cargarStockPorFecha(fechaSeleccionada);
-            } else {
-                await cargarStockHoy();
-            }
-        }
-    }, [productoSeleccionado, cantidadVenta, user?.id, crearVenta, fechaSeleccionada, cargarStockPorFecha, cargarStockHoy]);
-
-    // Cerrar modal de venta
-    const handleCloseModalVenta = useCallback(() => {
-        setShowModalVenta(false);
-        setProductoSeleccionado(null);
-        setCantidadVenta(1);
-    }, []);
 
     if (isLoading && !productosCargados) {
         return (
@@ -203,12 +227,13 @@ export default function MiStockHoyPage() {
         );
     }
 
+    const cantidadProductos = stockData?.productos?.length || 0;
+
     return (
         <div className="min-h-screen bg-gray-50">
             <Header titulo="Mi Stock Hoy" />
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                {/* Calendario */}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
                 {mostrarCalendario && (
                     <div className="mb-6">
                         <DiasMes
@@ -219,12 +244,10 @@ export default function MiStockHoyPage() {
                     </div>
                 )}
 
-                {/* Vista del día seleccionado */}
                 {!mostrarCalendario && fechaSeleccionada && (
                     <>
-                        {/* Encabezado del día seleccionado */}
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1">
                                 <button
                                     onClick={handleVolverCalendario}
                                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-gray-800"
@@ -235,7 +258,7 @@ export default function MiStockHoyPage() {
                                     </svg>
                                 </button>
                                 <div>
-                                    <h2 className="text-xl font-bold text-gray-800">
+                                    <h2 className="text-sm font-bold text-gray-800">
                                         📅 {new Date(fechaSeleccionada).toLocaleDateString('es-BO', {
                                             weekday: 'long',
                                             day: 'numeric',
@@ -244,32 +267,58 @@ export default function MiStockHoyPage() {
                                         })}
                                     </h2>
                                     <p className="text-sm text-gray-500">
-                                        {stockData.length} productos registrados
+                                        {cantidadProductos} productos registrados
+                                        {diaActivo && (
+                                            <span className="ml-2 text-green-600 text-xs">● Activo</span>
+                                        )}
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleVolverCalendario}
-                                    className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-                                >
-                                    <span>✕</span> Cerrar
-                                </button>
+                            <div className="flex gap-2 text-sm">
+                                {diaActivo ? (
+                                    <button
+                                        onClick={handleCerrarDia}
+                                        className="px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 bg-orange-600 text-white hover:bg-orange-700"
+                                    >
+                                        <span>🔒</span>
+                                        Cerrar Día
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleAbrirDia}
+                                        disabled={!puedeAbrirDia() || abriendoDia || stockData !== null}
+                                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${!puedeAbrirDia() || stockData !== null
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-green-600 text-white hover:bg-green-700'
+                                            }`}
+                                    >
+                                        {abriendoDia ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                                Abriendo...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span>🔓</span>
+                                                Abrir Día
+                                            </>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </div>
 
-                        {/* Tabla de stock */}
                         <Tabla
-                            stockData={stockData}
+                            key={refreshKey}
+                            initialStockData={stockData}
                             loading={stockLoading || isLoading}
-                            onVender={handleVender}
-                            onAnular={null}
                             onUpdateStock={handleUpdateStock}
-                            diaSeleccionado={fechaSeleccionada}
+                            diaSeleccionado={diaSeleccionado}
                             productosDisponibles={productos}
+                            esPasado={esPasado()}
+                            distribuidorId={user?.id}
                         />
 
-                        {/* Error */}
                         {error && (
                             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
                                 ❌ {error}
@@ -278,7 +327,6 @@ export default function MiStockHoyPage() {
                     </>
                 )}
 
-                {/* Mensaje si no hay productos */}
                 {productos.length === 0 && productosCargados && (
                     <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
                         <div className="text-6xl mb-4">📦</div>
@@ -295,7 +343,6 @@ export default function MiStockHoyPage() {
                     </div>
                 )}
 
-                {/* Mensaje de carga para el calendario */}
                 {mostrarCalendario && !productosCargados && (
                     <div className="text-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -303,82 +350,6 @@ export default function MiStockHoyPage() {
                     </div>
                 )}
             </main>
-
-            {/* Modal de venta */}
-            {showModalVenta && productoSeleccionado && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-gray-800">
-                                💰 Vender Producto
-                            </h3>
-                            <button
-                                onClick={handleCloseModalVenta}
-                                className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="bg-gray-50 rounded-xl p-4">
-                                <p className="text-sm text-gray-500">Producto</p>
-                                <p className="font-medium text-gray-800">
-                                    {productoSeleccionado.producto?.nombre}
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                    Stock disponible: {productoSeleccionado.stock_actual}
-                                </p>
-                                <p className="text-sm text-blue-600 font-semibold">
-                                    Precio: Bs. {parseFloat(productoSeleccionado.producto?.precio_base || 0).toFixed(2)}
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Cantidad a vender
-                                </label>
-                                <input
-                                    type="number"
-                                    value={cantidadVenta}
-                                    onChange={(e) => setCantidadVenta(Math.max(1, parseInt(e.target.value) || 1))}
-                                    min="1"
-                                    max={productoSeleccionado.stock_actual}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-base"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">
-                                    Máximo: {productoSeleccionado.stock_actual} unidades
-                                </p>
-                            </div>
-
-                            <div className="bg-blue-50 rounded-xl p-4">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Total a cobrar:</span>
-                                    <span className="font-bold text-blue-600 text-lg">
-                                        Bs. {(parseFloat(productoSeleccionado.producto?.precio_base || 0) * cantidadVenta).toFixed(2)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    onClick={handleCloseModalVenta}
-                                    className="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleConfirmarVenta}
-                                    disabled={cantidadVenta <= 0 || cantidadVenta > productoSeleccionado.stock_actual}
-                                    className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    ✅ Vender
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

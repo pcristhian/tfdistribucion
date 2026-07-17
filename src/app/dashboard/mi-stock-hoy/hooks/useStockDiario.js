@@ -8,40 +8,7 @@ export function useStockDiario() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // 📦 Obtener stock del día actual para un distribuidor
-    const getStockHoy = useCallback(async (distribuidorId) => {
-        setLoading(true);
-        setError(null);
-
-        try {
-            const { data, error } = await supabase
-                .from('stock_diario')
-                .select(`
-                    *,
-                    producto: producto_id (
-                        id,
-                        nombre,
-                        codigo,
-                        precio_base,
-                        empresa: empresa_id (id, nombre, color_primario)
-                    )
-                `)
-                .eq('distribuidor_id', distribuidorId)
-                .eq('fecha', new Date().toISOString().split('T')[0])
-                .order('producto(nombre)', { ascending: true });
-
-            if (error) throw error;
-            return data || [];
-        } catch (error) {
-            console.error('Error al obtener stock del día:', error);
-            setError(error.message);
-            return [];
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    // 📦 Obtener stock por fecha específica
+    // 📦 Obtener stock por fecha específica (o día activo)
     const getStockPorFecha = useCallback(async (distribuidorId, fecha) => {
         setLoading(true);
         setError(null);
@@ -49,60 +16,141 @@ export function useStockDiario() {
         try {
             const { data, error } = await supabase
                 .from('stock_diario')
-                .select(`
-                    *,
-                    producto: producto_id (
-                        id,
-                        nombre,
-                        codigo,
-                        precio_base,
-                        empresa: empresa_id (id, nombre, color_primario)
-                    )
-                `)
+                .select('*')
                 .eq('distribuidor_id', distribuidorId)
                 .eq('fecha', fecha)
-                .order('producto(nombre)', { ascending: true });
+                .maybeSingle();
 
             if (error) throw error;
-            return data || [];
+
+            if (!data) return null;
+
+            return {
+                id: data.id,
+                distribuidor_id: data.distribuidor_id,
+                fecha: data.fecha,
+                estado: data.estado,
+                productos: data.datos?.productos || [],
+                resumen: data.datos?.resumen || {},
+                ventas: data.datos?.ventas || [],
+                created_at: data.created_at,
+                updated_at: data.updated_at,
+            };
         } catch (error) {
             console.error('Error al obtener stock por fecha:', error);
             setError(error.message);
-            return [];
+            return null;
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // 🔄 Abrir día (registrar stock inicial)
-    const abrirDia = useCallback(async (distribuidorId, productos) => {
+    // 📦 Obtener stock del día actual
+    const getStockHoy = useCallback(async (distribuidorId) => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const hoy = new Date().toISOString().split('T')[0];
+            return await getStockPorFecha(distribuidorId, hoy);
+        } catch (error) {
+            console.error('Error al obtener stock del día:', error);
+            setError(error.message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, [getStockPorFecha]);
+
+    // 🔄 Abrir día
+    const abrirDia = useCallback(async (distribuidorId, productos, fecha = null) => {
         setLoading(true);
         setError(null);
         setSuccess(false);
 
         try {
-            const fecha = new Date().toISOString().split('T')[0];
-            const registros = productos.map(p => ({
-                distribuidor_id: distribuidorId,
+            const fechaDia = fecha || new Date().toISOString().split('T')[0];
+
+            // Desactivar cualquier día activo anterior
+            await supabase
+                .from('stock_diario')
+                .update({ estado: 'inactivo' })
+                .eq('distribuidor_id', distribuidorId)
+                .eq('estado', 'activo');
+
+            // Preparar datos en JSONB
+            const productosData = productos.map(p => ({
                 producto_id: p.producto_id,
-                fecha: fecha,
+                codigo: p.codigo || '',
+                nombre: p.nombre || '',
                 stock_inicial: p.stock_inicial || 0,
                 stock_actual: p.stock_inicial || 0,
                 stock_final: 0,
+                precio_base: p.precio_base || 0,
+                empresa: p.empresa || '',
+                empresa_color: p.empresa_color || '#6366f1',
             }));
 
-            const { data, error } = await supabase
-                .from('stock_diario')
-                .upsert(registros, {
-                    onConflict: 'distribuidor_id, producto_id, fecha',
-                    ignoreDuplicates: false,
-                })
-                .select();
+            const totalProductos = productosData.length;
+            const stockInicialTotal = productosData.reduce((sum, p) => sum + p.stock_inicial, 0);
+            const stockActualTotal = productosData.reduce((sum, p) => sum + p.stock_actual, 0);
 
-            if (error) throw error;
+            const datos = {
+                productos: productosData,
+                resumen: {
+                    total_productos: totalProductos,
+                    stock_inicial_total: stockInicialTotal,
+                    stock_actual_total: stockActualTotal,
+                    stock_final_total: 0,
+                    total_vendido: 0,
+                    total_efectivo: 0,
+                },
+                ventas: [],
+            };
+
+            // Verificar si ya existe un registro para esta fecha
+            const { data: existing, error: checkError } = await supabase
+                .from('stock_diario')
+                .select('id')
+                .eq('distribuidor_id', distribuidorId)
+                .eq('fecha', fechaDia)
+                .maybeSingle();
+
+            if (checkError) throw checkError;
+
+            let result;
+            if (existing) {
+                const { data, error } = await supabase
+                    .from('stock_diario')
+                    .update({
+                        estado: 'activo',
+                        datos: datos,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', existing.id)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                result = data;
+            } else {
+                const { data, error } = await supabase
+                    .from('stock_diario')
+                    .insert([{
+                        distribuidor_id: distribuidorId,
+                        fecha: fechaDia,
+                        estado: 'activo',
+                        datos: datos,
+                    }])
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                result = data;
+            }
 
             setSuccess(true);
-            return data;
+            return result;
         } catch (error) {
             console.error('Error al abrir día:', error);
             setError(error.message);
@@ -112,160 +160,252 @@ export function useStockDiario() {
         }
     }, []);
 
-    // 💰 Crear venta (reduce stock_actual)
-    const crearVenta = useCallback(async (ventaData) => {
+    // 🔄 Actualizar stock de un producto específico (VERSIÓN SIMPLIFICADA)
+    const actualizarStockProducto = useCallback(async (distribuidorId, productoId, nuevoStock, fecha = null) => {
         setLoading(true);
         setError(null);
         setSuccess(false);
 
         try {
-            // 1. Verificar stock disponible
-            const { data: stock, error: stockError } = await supabase
+            const fechaDia = fecha || new Date().toISOString().split('T')[0];
+
+            // ✅ Obtener el registro existente para esta fecha
+            let { data: dia, error: getError } = await supabase
                 .from('stock_diario')
-                .select('id, stock_actual, producto_id')
-                .eq('id', ventaData.stock_diario_id)
+                .select('*')
+                .eq('distribuidor_id', distribuidorId)
+                .eq('fecha', fechaDia)
+                .maybeSingle();
+
+            if (getError) throw getError;
+
+            // ✅ Obtener datos del producto
+            const { data: producto, error: prodError } = await supabase
+                .from('productos')
+                .select(`
+                    *,
+                    empresa: empresa_id (nombre, color_primario)
+                `)
+                .eq('id', productoId)
                 .single();
 
-            if (stockError) throw stockError;
+            if (prodError) throw prodError;
 
-            if (!stock) {
-                throw new Error('Stock no encontrado');
+            const nuevoProducto = {
+                producto_id: productoId,
+                codigo: producto.codigo || '',
+                nombre: producto.nombre || '',
+                stock_inicial: nuevoStock || 0,
+                stock_actual: nuevoStock || 0,
+                stock_final: 0,
+                precio_base: producto.precio_base || 0,
+                empresa: producto.empresa?.nombre || '',
+                empresa_color: producto.empresa?.color_primario || '#6366f1',
+            };
+
+            let datos;
+            let productos;
+
+            if (!dia) {
+                // ✅ Crear nuevo registro
+                datos = {
+                    productos: [nuevoProducto],
+                    resumen: {
+                        total_productos: 1,
+                        stock_inicial_total: nuevoStock || 0,
+                        stock_actual_total: nuevoStock || 0,
+                        stock_final_total: 0,
+                        total_vendido: 0,
+                        total_efectivo: 0,
+                    },
+                    ventas: [],
+                };
+
+                const { data, error } = await supabase
+                    .from('stock_diario')
+                    .insert([{
+                        distribuidor_id: distribuidorId,
+                        fecha: fechaDia,
+                        estado: 'inactivo',
+                        datos: datos,
+                    }])
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                setSuccess(true);
+                return data;
             }
 
-            if (stock.stock_actual < ventaData.cantidad) {
-                throw new Error(`Stock insuficiente. Disponible: ${stock.stock_actual}, Solicitado: ${ventaData.cantidad}`);
+            // ✅ Actualizar registro existente
+            productos = dia.datos?.productos || [];
+
+            // Buscar y actualizar el producto
+            const index = productos.findIndex(p => p.producto_id === productoId);
+            if (index === -1) {
+                productos.push(nuevoProducto);
+            } else {
+                productos[index].stock_inicial = nuevoStock;
+                productos[index].stock_actual = nuevoStock;
+                productos[index].stock_final = 0;
             }
 
-            // 2. Registrar la venta
-            const { data: venta, error: ventaError } = await supabase
-                .from('ventas')
-                .insert([{
-                    distribuidor_id: ventaData.distribuidor_id,
-                    cliente_id: ventaData.cliente_id,
-                    ruta_id: ventaData.ruta_id,
-                    producto_id: ventaData.producto_id,
-                    stock_diario_id: ventaData.stock_diario_id,
-                    cantidad: ventaData.cantidad,
-                    subtotal: ventaData.subtotal,
-                    descuento_total: ventaData.descuento_total || 0,
-                    total: ventaData.total,
-                    observacion: ventaData.observacion || '',
-                }])
-                .select()
-                .single();
+            // Recalcular resumen
+            const totalProductos = productos.length;
+            const stockInicialTotal = productos.reduce((sum, p) => sum + (p.stock_inicial || 0), 0);
+            const stockActualTotal = productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0);
 
-            if (ventaError) throw ventaError;
+            datos = dia.datos || {};
+            datos.productos = productos;
+            datos.resumen = {
+                total_productos: totalProductos,
+                stock_inicial_total: stockInicialTotal,
+                stock_actual_total: stockActualTotal,
+                stock_final_total: 0,
+                total_vendido: 0,
+                total_efectivo: 0,
+            };
 
-            // 3. Actualizar stock_actual (el trigger lo hará automáticamente)
-            // Pero por si acaso, lo hacemos manual también
-            const nuevoStock = stock.stock_actual - ventaData.cantidad;
-            const { error: updateError } = await supabase
-                .from('stock_diario')
-                .update({
-                    stock_actual: nuevoStock,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', ventaData.stock_diario_id);
-
-            if (updateError) throw updateError;
-
-            setSuccess(true);
-            return venta;
-        } catch (error) {
-            console.error('Error al crear venta:', error);
-            setError(error.message);
-            return null;
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    // 🔄 Anular venta (restaura stock_actual)
-    const anularVenta = useCallback(async (ventaId) => {
-        setLoading(true);
-        setError(null);
-        setSuccess(false);
-
-        try {
-            // 1. Obtener la venta con su stock_diario_id y cantidad
-            const { data: venta, error: ventaError } = await supabase
-                .from('ventas')
-                .select('id, stock_diario_id, cantidad, producto_id, distribuidor_id')
-                .eq('id', ventaId)
-                .single();
-
-            if (ventaError) throw ventaError;
-
-            if (!venta) {
-                throw new Error('Venta no encontrada');
-            }
-
-            if (!venta.stock_diario_id) {
-                throw new Error('Esta venta no tiene stock asociado');
-            }
-
-            // 2. Obtener stock actual
-            const { data: stock, error: stockError } = await supabase
-                .from('stock_diario')
-                .select('id, stock_actual')
-                .eq('id', venta.stock_diario_id)
-                .single();
-
-            if (stockError) throw stockError;
-
-            // 3. Restaurar stock
-            const nuevoStock = stock.stock_actual + venta.cantidad;
-            const { error: updateError } = await supabase
-                .from('stock_diario')
-                .update({
-                    stock_actual: nuevoStock,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', venta.stock_diario_id);
-
-            if (updateError) throw updateError;
-
-            // 4. Marcar la venta como anulada (soft delete o actualizar estado)
-            const { error: anularError } = await supabase
-                .from('ventas')
-                .update({
-                    observacion: `ANULADA - ${new Date().toISOString()}`,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', ventaId);
-
-            if (anularError) throw anularError;
-
-            setSuccess(true);
-            return { ventaAnulada: venta, stockRestaurado: nuevoStock };
-        } catch (error) {
-            console.error('Error al anular venta:', error);
-            setError(error.message);
-            return null;
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    // 🔄 Cerrar día (calcular stock_final)
-    const cerrarDia = useCallback(async (distribuidorId, fecha) => {
-        setLoading(true);
-        setError(null);
-        setSuccess(false);
-
-        try {
-            const fechaObj = fecha || new Date().toISOString().split('T')[0];
-
-            // Actualizar stock_final = stock_actual para todos los productos del día
+            // Guardar cambios (mantener el estado actual)
             const { data, error } = await supabase
                 .from('stock_diario')
                 .update({
-                    stock_final: supabase.raw('stock_actual'),
+                    datos: datos,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', dia.id)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            setSuccess(true);
+            return data;
+        } catch (error) {
+            console.error('Error al actualizar stock:', error);
+            setError(error.message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // 🔄 Crear nuevo producto en el stock del día
+    const crearStockDiario = useCallback(async (distribuidorId, productoId, fecha, stockInicial) => {
+        return await actualizarStockProducto(distribuidorId, productoId, stockInicial || 0, fecha);
+    }, [actualizarStockProducto]);
+
+    // 🟢 Verificar si hay un día activo
+    const verificarDiaAbierto = useCallback(async (distribuidorId) => {
+        try {
+            const { data, error } = await supabase
+                .from('stock_diario')
+                .select('id', { count: 'exact', head: true })
+                .eq('distribuidor_id', distribuidorId)
+                .eq('estado', 'activo');
+
+            if (error) throw error;
+            return (data?.length || 0) > 0;
+        } catch (error) {
+            console.error('Error al verificar día abierto:', error);
+            return false;
+        }
+    }, []);
+
+    // 📊 Obtener resumen del día
+    const getResumenDia = useCallback(async (distribuidorId) => {
+        try {
+            const hoy = new Date().toISOString().split('T')[0];
+            const { data, error } = await supabase
+                .from('stock_diario')
+                .select('datos')
+                .eq('distribuidor_id', distribuidorId)
+                .eq('fecha', hoy)
+                .maybeSingle();
+
+            if (error) throw error;
+
+            if (!data) {
+                return {
+                    totalProductos: 0,
+                    stockTotalInicial: 0,
+                    stockTotalActual: 0,
+                    stockTotalVendido: 0,
+                    productos: [],
+                };
+            }
+
+            const resumen = data.datos?.resumen || {};
+            const productos = data.datos?.productos || [];
+
+            return {
+                totalProductos: resumen.total_productos || 0,
+                stockTotalInicial: resumen.stock_inicial_total || 0,
+                stockTotalActual: resumen.stock_actual_total || 0,
+                stockTotalVendido: resumen.total_vendido || 0,
+                productos: productos,
+            };
+        } catch (error) {
+            console.error('Error al obtener resumen del día:', error);
+            return null;
+        }
+    }, []);
+
+    // 🔄 Cerrar día
+    const cerrarDia = useCallback(async (distribuidorId) => {
+        setLoading(true);
+        setError(null);
+        setSuccess(false);
+
+        try {
+            const { data: diaActivo, error: getError } = await supabase
+                .from('stock_diario')
+                .select('datos')
+                .eq('distribuidor_id', distribuidorId)
+                .eq('estado', 'activo')
+                .maybeSingle();
+
+            if (getError) throw getError;
+            if (!diaActivo) {
+                throw new Error('No hay un día activo para cerrar');
+            }
+
+            let datos = diaActivo.datos;
+            let productos = datos.productos || [];
+
+            productos = productos.map(p => ({
+                ...p,
+                stock_final: p.stock_actual || 0,
+            }));
+
+            const totalProductos = productos.length;
+            const stockInicialTotal = productos.reduce((sum, p) => sum + (p.stock_inicial || 0), 0);
+            const stockActualTotal = productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0);
+            const stockFinalTotal = productos.reduce((sum, p) => sum + (p.stock_final || 0), 0);
+            const totalVendido = productos.reduce((sum, p) => sum + ((p.stock_inicial || 0) - (p.stock_actual || 0)), 0);
+            const totalEfectivo = productos.reduce((sum, p) => sum + ((p.stock_inicial || 0) - (p.stock_actual || 0)) * (p.precio_base || 0), 0);
+
+            datos.productos = productos;
+            datos.resumen = {
+                total_productos: totalProductos,
+                stock_inicial_total: stockInicialTotal,
+                stock_actual_total: stockActualTotal,
+                stock_final_total: stockFinalTotal,
+                total_vendido: totalVendido,
+                total_efectivo: totalEfectivo,
+            };
+
+            const { data, error } = await supabase
+                .from('stock_diario')
+                .update({
+                    estado: 'cerrado',
+                    datos: datos,
                     updated_at: new Date().toISOString(),
                 })
                 .eq('distribuidor_id', distribuidorId)
-                .eq('fecha', fechaObj)
-                .select();
+                .eq('estado', 'activo')
+                .select()
+                .single();
 
             if (error) throw error;
 
@@ -280,73 +420,18 @@ export function useStockDiario() {
         }
     }, []);
 
-    // 📊 Verificar si el día está abierto (tiene stock registrado)
-    const verificarDiaAbierto = useCallback(async (distribuidorId) => {
-        try {
-            const fecha = new Date().toISOString().split('T')[0];
-            const { data, error } = await supabase
-                .from('stock_diario')
-                .select('id', { count: 'exact', head: true })
-                .eq('distribuidor_id', distribuidorId)
-                .eq('fecha', fecha);
-
-            if (error) throw error;
-            return (data?.length || 0) > 0;
-        } catch (error) {
-            console.error('Error al verificar día abierto:', error);
-            return false;
-        }
-    }, []);
-
-    // 📊 Obtener resumen del día
-    const getResumenDia = useCallback(async (distribuidorId) => {
-        try {
-            const fecha = new Date().toISOString().split('T')[0];
-            const { data, error } = await supabase
-                .from('stock_diario')
-                .select(`
-                    *,
-                    producto: producto_id (
-                        id,
-                        nombre,
-                        codigo,
-                        precio_base,
-                        empresa: empresa_id (id, nombre, color_primario)
-                    )
-                `)
-                .eq('distribuidor_id', distribuidorId)
-                .eq('fecha', fecha)
-                .order('producto(nombre)', { ascending: true });
-
-            if (error) throw error;
-
-            const resumen = {
-                totalProductos: data?.length || 0,
-                stockTotalInicial: data?.reduce((sum, item) => sum + (item.stock_inicial || 0), 0) || 0,
-                stockTotalActual: data?.reduce((sum, item) => sum + (item.stock_actual || 0), 0) || 0,
-                stockTotalVendido: data?.reduce((sum, item) => sum + ((item.stock_inicial || 0) - (item.stock_actual || 0)), 0) || 0,
-                productos: data || [],
-            };
-
-            return resumen;
-        } catch (error) {
-            console.error('Error al obtener resumen del día:', error);
-            return null;
-        }
-    }, []);
-
     return {
         loading,
         error,
         success,
-        getStockHoy,
         getStockPorFecha,
+        getStockHoy,
         abrirDia,
-        crearVenta,
-        anularVenta,
-        cerrarDia,
+        actualizarStockProducto,
+        crearStockDiario,
         verificarDiaAbierto,
         getResumenDia,
+        cerrarDia,
         reset: () => {
             setError(null);
             setSuccess(false);

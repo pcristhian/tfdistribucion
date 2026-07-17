@@ -23,7 +23,6 @@ export default function DiasMes({
         const month = fecha.getMonth();
         const hoy = fecha.getDate();
 
-        // Guardar fecha de hoy en formato YYYY-MM-DD
         const hoyStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(hoy).padStart(2, '0')}`;
         setFechaHoy(hoyStr);
 
@@ -46,7 +45,7 @@ export default function DiasMes({
         setDiasDelMes(dias);
     }, []);
 
-    // Verificar qué días tienen datos de stock
+    // ✅ Verificar qué días tienen datos de stock (nueva estructura JSONB)
     useEffect(() => {
         if (!distribuidorId || diasDelMes.length === 0) return;
 
@@ -55,16 +54,27 @@ export default function DiasMes({
             try {
                 const fechas = diasDelMes.map(d => d.fecha);
 
+                // ✅ Con la nueva estructura, solo necesitamos verificar si existe un registro
+                // para cada fecha (independientemente del estado)
                 const { data, error } = await supabase
                     .from('stock_diario')
-                    .select('fecha')
+                    .select('fecha, estado, datos')
                     .eq('distribuidor_id', distribuidorId)
                     .in('fecha', fechas)
                     .order('fecha', { ascending: false });
 
                 if (error) throw error;
 
-                const fechasConDatos = data.map(item => item.fecha);
+                // ✅ Filtrar fechas que tienen datos (cualquier estado, o solo activos/cerrados)
+                // Ahora verificamos si tienen datos en el JSONB (productos no vacío)
+                const fechasConDatos = data
+                    .filter(item => {
+                        // ✅ Verificar si tiene productos en el JSONB
+                        const productos = item.datos?.productos || [];
+                        return productos.length > 0;
+                    })
+                    .map(item => item.fecha);
+
                 setDiasConDatos(fechasConDatos);
             } catch (error) {
                 console.error('Error al verificar días con datos:', error);
