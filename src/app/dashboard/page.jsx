@@ -36,6 +36,9 @@ export default function DashboardPage() {
     const handleMiStockHoy = () => {
         router.push('/dashboard/mi-stock-hoy');
     };
+    const handlePreciosRuta = () => {
+        router.push('/dashboard/precios-ruta');
+    };
 
     // ✅ Siempre mostrar loading si no está montado o no hay usuario
     if (!isMounted || isLoading || !user) {
@@ -115,6 +118,17 @@ export default function DashboardPage() {
                         <span className="text-4xl sm:text-5xl mb-2 sm:mb-3">📊</span>
                         <h3 className="text-base sm:text-xl font-bold">Stock Hoy</h3>
                         <p className="text-xs sm:text-sm text-purple-100 mt-1">Ver mi Stock</p>
+                    </motion.button>
+
+                    <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handlePreciosRuta}
+                        className="aspect-[4/3] bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center p-4 sm:p-6 text-white"
+                    >
+                        <span className="text-4xl sm:text-5xl mb-2 sm:mb-3">📊</span>
+                        <h3 className="text-base sm:text-xl font-bold">Rutas y precio</h3>
+                        <p className="text-xs sm:text-sm text-purple-100 mt-1">Cambiar precios de todas las rutas</p>
                     </motion.button>
                 </div>
 

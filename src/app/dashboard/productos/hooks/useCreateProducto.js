@@ -1,3 +1,4 @@
+// hooks/useCreateProducto.js
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -73,8 +74,8 @@ export function useCreateProducto() {
             errores.push('El precio mínimo no puede ser mayor al precio base');
         }
 
-        if (data.stock && data.stock < 0) {
-            errores.push('El stock no puede ser negativo');
+        if (data.corte && data.corte < 0) {
+            errores.push('El corte no puede ser negativo');
         }
 
         return errores;
@@ -103,7 +104,6 @@ export function useCreateProducto() {
                 precio_minimo: data.precio_minimo ? parseFloat(data.precio_minimo) : null,
                 precio_costo: parseFloat(data.precio_costo),
                 corte: data.corte ? parseFloat(data.corte) : null,
-                stock: data.stock ? parseInt(data.stock) : 0,
                 empresa_id: data.empresa_id,
                 categoria_id: data.categoria_id,
                 activo: data.activo !== undefined ? data.activo : true,
@@ -147,37 +147,6 @@ export function useCreateProducto() {
             setLoading(false);
         }
     }, [validarProducto]);
-
-    // 🔄 Crear múltiples productos a la vez
-    const createMultipleProductos = useCallback(async (productos) => {
-        setLoading(true);
-        setError(null);
-        setSuccess(false);
-
-        try {
-            const resultados = [];
-            const errores = [];
-
-            for (const producto of productos) {
-                const result = await createProducto(producto);
-                if (result) {
-                    resultados.push(result);
-                } else {
-                    errores.push(`Error al crear "${producto.nombre}"`);
-                }
-            }
-
-            if (errores.length > 0) {
-                setError(`Se crearon ${resultados.length} productos. Errores: ${errores.join(', ')}`);
-            } else {
-                setSuccess(true);
-            }
-
-            return resultados;
-        } finally {
-            setLoading(false);
-        }
-    }, [createProducto]);
 
     // 🔄 Verificar si un código está disponible
     const verificarCodigo = useCallback(async (codigo) => {
@@ -234,7 +203,6 @@ export function useCreateProducto() {
         success,
         productoCreado,
         createProducto,
-        createMultipleProductos,
         getEmpresas,
         getCategorias,
         getFormData,

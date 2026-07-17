@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useLogin } from '../../login/hook/useLogin';
 import { useEditProductos } from './hooks/useEditProducto';
 import { useDeleteProducto } from './hooks/useDeleteProducto';
+import { useCreateProducto } from './hooks/useCreateProducto'; // ✅ Importar
 import Header from './components/Header';
 import Tabla from './components/Tabla';
 import ModalEditarProductos from './components/ModalEditarProductos';
+import ModalCrearProducto from './components/ModalCrearProducto'; // ✅ Importar
 
 export default function ProductosPage() {
     const { getUser } = useLogin();
@@ -19,15 +21,23 @@ export default function ProductosPage() {
         getProductos,
         updateProducto,
         loading: loadingProductos,
-        getEmpresas,   // ✅ Ya está disponible
-        getCategorias  // ✅ Ya está disponible
+        getEmpresas,
+        getCategorias
     } = useEditProductos();
 
     const { desactivarProducto, activarProducto } = useDeleteProducto();
 
+    // ✅ Hook para crear productos
+    const {
+        createProducto,
+        loading: loadingCreate,
+        reset: resetCreate
+    } = useCreateProducto();
+
     const [productos, setProductos] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false); // ✅ Nuevo estado
     const [productoEditando, setProductoEditando] = useState(null);
     const [empresas, setEmpresas] = useState([]);
     const [categorias, setCategorias] = useState([]);
@@ -44,7 +54,7 @@ export default function ProductosPage() {
         setIsLoading(false);
     }, [getProductos]);
 
-    // ✅ Función para cargar datos del modal (USANDO las funciones extraídas)
+    // ✅ Función para cargar datos del modal
     const cargarDatosModal = useCallback(async () => {
         try {
             const [empresasData, categoriasData] = await Promise.all([
@@ -87,16 +97,28 @@ export default function ProductosPage() {
 
     const handleEdit = (producto) => {
         setProductoEditando(producto);
-        setShowModal(true);
+        setShowEditModal(true);
     };
 
     const handleSaveEdit = async (data) => {
         setSaving(true);
         await updateProducto(productoEditando.id, data);
         setSaving(false);
-        setShowModal(false);
+        setShowEditModal(false);
         setProductoEditando(null);
         await cargarProductos();
+    };
+
+    // ✅ Manejar creación de nuevo producto
+    const handleCreateProducto = async (data) => {
+        const result = await createProducto(data);
+        if (result) {
+            setShowCreateModal(false);
+            await cargarProductos();
+            resetCreate();
+            // Mostrar mensaje de éxito
+            alert(`✅ Producto "${result.nombre}" creado correctamente`);
+        }
     };
 
     if (isLoading || !user) {
@@ -119,7 +141,7 @@ export default function ProductosPage() {
                         </span>
                     </div>
                     <button
-                        onClick={() => router.push('/dashboard/productos/nuevo')}
+                        onClick={() => setShowCreateModal(true)} // ✅ Abrir modal de creación
                         className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                     >
                         <span className="text-lg">+</span>
@@ -135,10 +157,11 @@ export default function ProductosPage() {
                 />
             </main>
 
+            {/* Modal Editar */}
             <ModalEditarProductos
-                isOpen={showModal}
+                isOpen={showEditModal}
                 onClose={() => {
-                    setShowModal(false);
+                    setShowEditModal(false);
                     setProductoEditando(null);
                 }}
                 producto={productoEditando}
@@ -146,6 +169,19 @@ export default function ProductosPage() {
                 empresas={empresas}
                 categorias={categorias}
                 loading={saving}
+            />
+
+            {/* ✅ Modal Crear */}
+            <ModalCrearProducto
+                isOpen={showCreateModal}
+                onClose={() => {
+                    setShowCreateModal(false);
+                    resetCreate();
+                }}
+                onSave={handleCreateProducto}
+                empresas={empresas}
+                categorias={categorias}
+                loading={loadingCreate}
             />
         </div>
     );

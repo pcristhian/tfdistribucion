@@ -1,3 +1,4 @@
+// app/dashboard/mi-stock-hoy/page.js
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -8,6 +9,10 @@ import { useEditProductos } from '../productos/hooks/useEditProducto';
 import Header from './components/Header';
 import Tabla from './components/Tabla';
 import DiasMes from './components/DiasMes';
+import ModalCerrarDia from './components/ModalCerrarDia';
+import ModalAbrirDia from './components/ModalAbrirDia';
+import { useModal } from './hooks/useModal';
+import { getBoliviaDateString, isPastDate } from '@/lib/boliviaTime'; // ✅ Importar helpers
 
 export default function MiStockHoyPage() {
     const { getUser } = useLogin();
@@ -35,7 +40,14 @@ export default function MiStockHoyPage() {
     const [productosCargados, setProductosCargados] = useState(false);
     const [abriendoDia, setAbriendoDia] = useState(false);
     const [diaActivo, setDiaActivo] = useState(false);
+    const [fechaActiva, setFechaActiva] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [cerrandoDia, setCerrandoDia] = useState(false);
+    const [stocksActuales, setStocksActuales] = useState({});
+
+    // ✅ Modales
+    const modalCerrar = useModal();
+    const modalAbrir = useModal();
 
     const isFirstRender = useRef(true);
 
@@ -62,8 +74,10 @@ export default function MiStockHoyPage() {
 
             if (data?.estado === 'activo') {
                 setDiaActivo(true);
+                setFechaActiva(fecha);
             } else {
                 setDiaActivo(false);
+                setFechaActiva(null);
             }
         } catch (error) {
             console.error('Error al cargar stock:', error);
@@ -76,14 +90,17 @@ export default function MiStockHoyPage() {
         if (!user?.id) return;
         setIsLoading(true);
         try {
+            // ✅ Usar getStockHoy que ya usa Bolivia internamente
             const data = await getStockHoy(user.id);
             setStockData(data);
             setRefreshKey(prev => prev + 1);
 
             if (data?.estado === 'activo') {
                 setDiaActivo(true);
+                setFechaActiva(data.fecha);
             } else {
                 setDiaActivo(false);
+                setFechaActiva(null);
             }
         } catch (error) {
             console.error('Error al cargar stock del día:', error);
@@ -94,26 +111,54 @@ export default function MiStockHoyPage() {
 
     const esPasado = useCallback(() => {
         if (!fechaSeleccionada) return false;
+
         const fecha = new Date(fechaSeleccionada);
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
+        const hoy = new Date(getBoliviaDateString());
+
+        // Resetear horas para comparar solo fechas
         fecha.setHours(0, 0, 0, 0);
+        hoy.setHours(0, 0, 0, 0);
+
+        // ✅ Solo es pasado si la fecha es MENOR que hoy
         return fecha < hoy;
     }, [fechaSeleccionada]);
 
-    const handleSelectDia = useCallback((fecha, tieneDatos) => {
+
+    const handleSelectDia = useCallback((fecha, tieneDatos, esActivo) => {
         setFechaSeleccionada(fecha);
         setDiaSeleccionado(fecha);
         setMostrarCalendario(false);
+
+        if (esActivo) {
+            setDiaActivo(true);
+            setFechaActiva(fecha);
+        } else {
+            setDiaActivo(false);
+            setFechaActiva(null);
+        }
+
         if (tieneDatos) {
             cargarStockPorFecha(fecha);
         } else {
             setStockData(null);
             setRefreshKey(prev => prev + 1);
-            setDiaActivo(false);
             setIsLoading(false);
         }
     }, [cargarStockPorFecha]);
+
+    const handleDiaActivo = useCallback((fecha) => {
+        if (fecha) {
+            setFechaActiva(fecha);
+            if (fechaSeleccionada === fecha) {
+                setDiaActivo(true);
+            }
+        } else {
+            setFechaActiva(null);
+            if (fechaSeleccionada) {
+                setDiaActivo(false);
+            }
+        }
+    }, [fechaSeleccionada]);
 
     const handleVolverCalendario = useCallback(() => {
         setMostrarCalendario(true);
@@ -121,19 +166,24 @@ export default function MiStockHoyPage() {
         setFechaSeleccionada(null);
         setStockData(null);
         setDiaActivo(false);
+        setFechaActiva(null);
         setIsLoading(false);
     }, []);
 
     const puedeAbrirDia = useCallback(() => {
         if (!fechaSeleccionada) return false;
+
         const fecha = new Date(fechaSeleccionada);
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
+        const hoy = new Date(getBoliviaDateString());
+
         fecha.setHours(0, 0, 0, 0);
+        hoy.setHours(0, 0, 0, 0);
+
+        // ✅ Puede abrir si es hoy o futuro
         return fecha >= hoy;
     }, [fechaSeleccionada]);
-
-    const handleAbrirDia = useCallback(async () => {
+    // ✅ Abrir modal de apertura
+    const handleAbrirDia = useCallback(() => {
         if (!user?.id || !fechaSeleccionada) return;
 
         if (diaActivo) {
@@ -141,23 +191,52 @@ export default function MiStockHoyPage() {
             return;
         }
 
+        // ✅ Obtener los stocks actuales de la tabla
+        if (typeof window !== 'undefined' && window.__getStocksActuales) {
+            const stocks = window.__getStocksActuales();
+            setStocksActuales(stocks);
+            modalAbrir.openModal();
+        } else {
+            modalAbrir.openModal();
+        }
+    }, [user?.id, fechaSeleccionada, diaActivo, modalAbrir]);
+
+    // ✅ Confirmar apertura de día
+    const confirmarAbrirDia = useCallback(async () => {
+        if (!user?.id || !fechaSeleccionada) return;
+
         setAbriendoDia(true);
         try {
+            // ✅ Primero guardar los stocks
+            let stocksGuardados = false;
+            if (typeof window !== 'undefined' && window.__guardarTodosLosStocks) {
+                stocksGuardados = await window.__guardarTodosLosStocks();
+            }
+
+            if (!stocksGuardados) {
+                console.warn('⚠️ No se pudieron guardar todos los stocks');
+            }
+
+            // ✅ Preparar productos para abrir el día
             const productosStock = productos.map(p => ({
                 producto_id: p.id,
                 codigo: p.codigo || '',
                 nombre: p.nombre || '',
-                stock_inicial: 0,
+                stock_inicial: stocksActuales[p.id] || 0,
                 precio_base: p.precio_base || 0,
                 empresa: p.empresa?.nombre || '',
                 empresa_color: p.empresa?.color_primario || '#6366f1',
             }));
 
+            // ✅ Abrir el día
             const result = await abrirDia(user.id, productosStock, fechaSeleccionada);
             if (result) {
+                modalAbrir.closeModal();
                 alert('✅ Día abierto correctamente.');
                 await cargarStockPorFecha(fechaSeleccionada);
                 setDiaActivo(true);
+                setFechaActiva(fechaSeleccionada);
+                setRefreshKey(prev => prev + 1);
             }
         } catch (error) {
             console.error('Error al abrir día:', error);
@@ -165,9 +244,10 @@ export default function MiStockHoyPage() {
         } finally {
             setAbriendoDia(false);
         }
-    }, [user?.id, fechaSeleccionada, productos, diaActivo, abrirDia, cargarStockPorFecha]);
+    }, [user?.id, fechaSeleccionada, productos, stocksActuales, abrirDia, cargarStockPorFecha, modalAbrir]);
 
-    const handleCerrarDia = useCallback(async () => {
+    // ✅ Cerrar día
+    const handleCerrarDia = useCallback(() => {
         if (!user?.id || !fechaSeleccionada) return;
 
         if (!diaActivo) {
@@ -175,20 +255,30 @@ export default function MiStockHoyPage() {
             return;
         }
 
-        if (confirm('¿Estás seguro de cerrar el día?')) {
-            try {
-                const result = await cerrarDia(user.id);
-                if (result) {
-                    alert('✅ Día cerrado correctamente.');
-                    setDiaActivo(false);
-                    await cargarStockPorFecha(fechaSeleccionada);
-                }
-            } catch (error) {
-                console.error('Error al cerrar día:', error);
-                alert('❌ Error al cerrar el día');
+        modalCerrar.openModal();
+    }, [user?.id, fechaSeleccionada, diaActivo, modalCerrar]);
+
+    // ✅ Confirmar cierre de día
+    const confirmarCerrarDia = useCallback(async () => {
+        if (!user?.id || !fechaSeleccionada) return;
+
+        setCerrandoDia(true);
+        try {
+            const result = await cerrarDia(user.id);
+            if (result) {
+                modalCerrar.closeModal();
+                setDiaActivo(false);
+                setFechaActiva(null);
+                await cargarStockPorFecha(fechaSeleccionada);
+                setRefreshKey(prev => prev + 1);
             }
+        } catch (error) {
+            console.error('Error al cerrar día:', error);
+            alert('❌ Error al cerrar el día');
+        } finally {
+            setCerrandoDia(false);
         }
-    }, [user?.id, fechaSeleccionada, diaActivo, cerrarDia, cargarStockPorFecha]);
+    }, [user?.id, fechaSeleccionada, cerrarDia, cargarStockPorFecha, modalCerrar]);
 
     // ✅ SOLO GUARDA - NO RECARGA
     const handleUpdateStock = useCallback(async (distribuidorId, productoId, nuevoStock) => {
@@ -228,6 +318,7 @@ export default function MiStockHoyPage() {
     }
 
     const cantidadProductos = stockData?.productos?.length || 0;
+    const resumenDia = stockData?.resumen || {};
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -235,11 +326,12 @@ export default function MiStockHoyPage() {
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
                 {mostrarCalendario && (
-                    <div className="mb-6">
+                    <div className="mb-6" key={refreshKey}>
                         <DiasMes
                             distribuidorId={user?.id}
                             onSelectDia={handleSelectDia}
                             diaSeleccionado={diaSeleccionado}
+                            onDiaActivo={handleDiaActivo}
                         />
                     </div>
                 )}
@@ -269,7 +361,7 @@ export default function MiStockHoyPage() {
                                     <p className="text-sm text-gray-500">
                                         {cantidadProductos} productos registrados
                                         {diaActivo && (
-                                            <span className="ml-2 text-green-600 text-xs">● Activo</span>
+                                            <span className="ml-2 text-green-600 text-xs font-semibold">● Activo</span>
                                         )}
                                     </p>
                                 </div>
@@ -286,8 +378,8 @@ export default function MiStockHoyPage() {
                                 ) : (
                                     <button
                                         onClick={handleAbrirDia}
-                                        disabled={!puedeAbrirDia() || abriendoDia || stockData !== null}
-                                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${!puedeAbrirDia() || stockData !== null
+                                        disabled={!puedeAbrirDia() || abriendoDia}
+                                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${!puedeAbrirDia() || abriendoDia
                                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                             : 'bg-green-600 text-white hover:bg-green-700'
                                             }`}
@@ -317,6 +409,7 @@ export default function MiStockHoyPage() {
                             productosDisponibles={productos}
                             esPasado={esPasado()}
                             distribuidorId={user?.id}
+                            diaActivo={diaActivo}
                         />
 
                         {error && (
@@ -350,6 +443,29 @@ export default function MiStockHoyPage() {
                     </div>
                 )}
             </main>
+
+            {/* ✅ Modal de apertura de día */}
+            <ModalAbrirDia
+                isOpen={modalAbrir.isOpen}
+                onClose={modalAbrir.closeModal}
+                onConfirm={confirmarAbrirDia}
+                fecha={fechaSeleccionada}
+                productosCount={productos.length}
+                loading={abriendoDia}
+                diaActivo={diaActivo}
+                stocks={stocksActuales}
+                productos={productos}
+            />
+
+            {/* ✅ Modal de cierre de día */}
+            <ModalCerrarDia
+                isOpen={modalCerrar.isOpen}
+                onClose={modalCerrar.closeModal}
+                onConfirm={confirmarCerrarDia}
+                fecha={fechaSeleccionada}
+                resumen={resumenDia}
+                loading={cerrandoDia}
+            />
         </div>
     );
 }

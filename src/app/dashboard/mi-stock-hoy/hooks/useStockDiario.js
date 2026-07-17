@@ -1,7 +1,9 @@
+// app/dashboard/mi-stock-hoy/hooks/useStockDiario.js
 'use client';
 
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getBoliviaDateString } from '@/lib/boliviaTime'; // ✅ Importar la función
 
 export function useStockDiario() {
     const [loading, setLoading] = useState(false);
@@ -45,13 +47,13 @@ export function useStockDiario() {
         }
     }, []);
 
-    // 📦 Obtener stock del día actual
+    // 📦 Obtener stock del día actual (CORREGIDO)
     const getStockHoy = useCallback(async (distribuidorId) => {
         setLoading(true);
         setError(null);
 
         try {
-            const hoy = new Date().toISOString().split('T')[0];
+            const hoy = getBoliviaDateString(); // ✅ Ahora sí existe
             return await getStockPorFecha(distribuidorId, hoy);
         } catch (error) {
             console.error('Error al obtener stock del día:', error);
@@ -62,23 +64,28 @@ export function useStockDiario() {
         }
     }, [getStockPorFecha]);
 
-    // 🔄 Abrir día
+    // 🔄 Abrir día (CORREGIDO - con variables bien definidas)
     const abrirDia = useCallback(async (distribuidorId, productos, fecha = null) => {
         setLoading(true);
         setError(null);
         setSuccess(false);
 
         try {
-            const fechaDia = fecha || new Date().toISOString().split('T')[0];
+            // ✅ Obtener fecha en Bolivia (UTC-4)
+            let fechaDia;
+            if (fecha) {
+                fechaDia = fecha;
+            } else {
+                fechaDia = getBoliviaDateString();
+            }
 
-            // Desactivar cualquier día activo anterior
-            await supabase
-                .from('stock_diario')
-                .update({ estado: 'inactivo' })
-                .eq('distribuidor_id', distribuidorId)
-                .eq('estado', 'activo');
+            // ✅ Obtener el mes y año de la fecha seleccionada
+            const fechaObj = new Date(fechaDia);
+            const year = fechaObj.getFullYear();
+            const month = fechaObj.getMonth();
+            const totalDias = new Date(year, month + 1, 0).getDate();
 
-            // Preparar datos en JSONB
+            // ✅ Preparar datos para TODOS los días del mes
             const productosData = productos.map(p => ({
                 producto_id: p.producto_id,
                 codigo: p.codigo || '',
@@ -108,49 +115,91 @@ export function useStockDiario() {
                 ventas: [],
             };
 
-            // Verificar si ya existe un registro para esta fecha
-            const { data: existing, error: checkError } = await supabase
+            // ✅ Verificar si ya existen registros para este mes
+            const primerDia = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const ultimoDia = `${year}-${String(month + 1).padStart(2, '0')}-${String(totalDias).padStart(2, '0')}`;
+
+            const { data: existingRecords, error: checkError } = await supabase
                 .from('stock_diario')
-                .select('id')
+                .select('fecha, estado')
                 .eq('distribuidor_id', distribuidorId)
-                .eq('fecha', fechaDia)
-                .maybeSingle();
+                .gte('fecha', primerDia)
+                .lte('fecha', ultimoDia);
 
             if (checkError) throw checkError;
 
-            let result;
-            if (existing) {
-                const { data, error } = await supabase
+            // ✅ Si ya existen registros, actualizar en lugar de insertar
+            if (existingRecords && existingRecords.length > 0) {
+                // Desactivar todos los días del mes
+                await supabase
+                    .from('stock_diario')
+                    .update({
+                        estado: 'inactivo',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('distribuidor_id', distribuidorId)
+                    .gte('fecha', primerDia)
+                    .lte('fecha', ultimoDia);
+
+                // Activar solo el día seleccionado y actualizar sus datos
+                const { data: updated, error: updateError } = await supabase
                     .from('stock_diario')
                     .update({
                         estado: 'activo',
                         datos: datos,
-                        updated_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
                     })
-                    .eq('id', existing.id)
+                    .eq('distribuidor_id', distribuidorId)
+                    .eq('fecha', fechaDia)
                     .select()
                     .single();
 
-                if (error) throw error;
-                result = data;
-            } else {
-                const { data, error } = await supabase
-                    .from('stock_diario')
-                    .insert([{
-                        distribuidor_id: distribuidorId,
-                        fecha: fechaDia,
-                        estado: 'activo',
-                        datos: datos,
-                    }])
-                    .select()
-                    .single();
+                if (updateError) throw updateError;
 
-                if (error) throw error;
-                result = data;
+                setSuccess(true);
+                return updated;
             }
 
+            // ✅ No existen registros, crear todos los días del mes
+            const diasDelMes = [];
+            for (let dia = 1; dia <= totalDias; dia++) {
+                const fechaStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+                const esDiaSeleccionado = fechaStr === fechaDia;
+
+                diasDelMes.push({
+                    distribuidor_id: distribuidorId,
+                    fecha: fechaStr,
+                    estado: esDiaSeleccionado ? 'activo' : 'inactivo',
+                    datos: esDiaSeleccionado ? datos : {
+                        productos: [],
+                        resumen: {
+                            total_productos: 0,
+                            stock_inicial_total: 0,
+                            stock_actual_total: 0,
+                            stock_final_total: 0,
+                            total_vendido: 0,
+                            total_efectivo: 0
+                        },
+                        ventas: []
+                    },
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                });
+            }
+
+            // ✅ Insertar todos los días del mes
+            const { data, error } = await supabase
+                .from('stock_diario')
+                .insert(diasDelMes)
+                .select();
+
+            if (error) throw error;
+
+            // ✅ Buscar el día activo para retornarlo
+            const diaActivo = data.find(d => d.estado === 'activo');
+
             setSuccess(true);
-            return result;
+            return diaActivo || data[0];
         } catch (error) {
             console.error('Error al abrir día:', error);
             setError(error.message);
@@ -160,14 +209,20 @@ export function useStockDiario() {
         }
     }, []);
 
-    // 🔄 Actualizar stock de un producto específico (VERSIÓN SIMPLIFICADA)
+    // 🔄 Actualizar stock de un producto específico (CORREGIDO - con fecha Bolivia)
     const actualizarStockProducto = useCallback(async (distribuidorId, productoId, nuevoStock, fecha = null) => {
         setLoading(true);
         setError(null);
         setSuccess(false);
 
         try {
-            const fechaDia = fecha || new Date().toISOString().split('T')[0];
+            // ✅ Usar fecha Bolivia si no se proporciona una
+            let fechaDia;
+            if (fecha) {
+                fechaDia = fecha;
+            } else {
+                fechaDia = getBoliviaDateString();
+            }
 
             // ✅ Obtener el registro existente para esta fecha
             let { data: dia, error: getError } = await supabase
@@ -312,10 +367,10 @@ export function useStockDiario() {
         }
     }, []);
 
-    // 📊 Obtener resumen del día
+    // 📊 Obtener resumen del día (CORREGIDO - con fecha Bolivia)
     const getResumenDia = useCallback(async (distribuidorId) => {
         try {
-            const hoy = new Date().toISOString().split('T')[0];
+            const hoy = getBoliviaDateString();
             const { data, error } = await supabase
                 .from('stock_diario')
                 .select('datos')
