@@ -12,7 +12,7 @@ import DiasMes from './components/DiasMes';
 import ModalCerrarDia from './components/ModalCerrarDia';
 import ModalAbrirDia from './components/ModalAbrirDia';
 import { useModal } from './hooks/useModal';
-import { getBoliviaDateString, isPastDate } from '@/lib/boliviaTime'; // ✅ Importar helpers
+// ✅ Ya no necesitamos getBoliviaDateString, usaremos la fecha local del navegador
 
 export default function MiStockHoyPage() {
     const { getUser } = useLogin();
@@ -50,6 +50,15 @@ export default function MiStockHoyPage() {
     const modalAbrir = useModal();
 
     const isFirstRender = useRef(true);
+
+    // ✅ Función para obtener la fecha de hoy en formato YYYY-MM-DD (sin ajustes)
+    const getFechaHoy = useCallback(() => {
+        const ahora = new Date();
+        const year = ahora.getFullYear();
+        const month = String(ahora.getMonth() + 1).padStart(2, '0');
+        const day = String(ahora.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
 
     const cargarProductos = useCallback(async () => {
         try {
@@ -90,8 +99,9 @@ export default function MiStockHoyPage() {
         if (!user?.id) return;
         setIsLoading(true);
         try {
-            // ✅ Usar getStockHoy que ya usa Bolivia internamente
-            const data = await getStockHoy(user.id);
+            // ✅ Usar la fecha de hoy sin ajustes
+            const hoy = getFechaHoy();
+            const data = await getStockPorFecha(user.id, hoy);
             setStockData(data);
             setRefreshKey(prev => prev + 1);
 
@@ -107,22 +117,35 @@ export default function MiStockHoyPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [user?.id, getStockHoy]);
+    }, [user?.id, getStockPorFecha, getFechaHoy]);
 
+    // ✅ Verificar si una fecha es pasada (sin ajustes de zona horaria)
     const esPasado = useCallback(() => {
         if (!fechaSeleccionada) return false;
 
         const fecha = new Date(fechaSeleccionada);
-        const hoy = new Date(getBoliviaDateString());
+        const hoy = new Date(getFechaHoy());
 
         // Resetear horas para comparar solo fechas
         fecha.setHours(0, 0, 0, 0);
         hoy.setHours(0, 0, 0, 0);
 
-        // ✅ Solo es pasado si la fecha es MENOR que hoy
         return fecha < hoy;
-    }, [fechaSeleccionada]);
+    }, [fechaSeleccionada, getFechaHoy]);
 
+    // ✅ Verificar si se puede abrir el día
+    const puedeAbrirDia = useCallback(() => {
+        if (!fechaSeleccionada) return false;
+
+        const fecha = new Date(fechaSeleccionada);
+        const hoy = new Date(getFechaHoy());
+
+        fecha.setHours(0, 0, 0, 0);
+        hoy.setHours(0, 0, 0, 0);
+
+        // ✅ Puede abrir si es hoy o futuro
+        return fecha >= hoy;
+    }, [fechaSeleccionada, getFechaHoy]);
 
     const handleSelectDia = useCallback((fecha, tieneDatos, esActivo) => {
         setFechaSeleccionada(fecha);
@@ -170,18 +193,6 @@ export default function MiStockHoyPage() {
         setIsLoading(false);
     }, []);
 
-    const puedeAbrirDia = useCallback(() => {
-        if (!fechaSeleccionada) return false;
-
-        const fecha = new Date(fechaSeleccionada);
-        const hoy = new Date(getBoliviaDateString());
-
-        fecha.setHours(0, 0, 0, 0);
-        hoy.setHours(0, 0, 0, 0);
-
-        // ✅ Puede abrir si es hoy o futuro
-        return fecha >= hoy;
-    }, [fechaSeleccionada]);
     // ✅ Abrir modal de apertura
     const handleAbrirDia = useCallback(() => {
         if (!user?.id || !fechaSeleccionada) return;
@@ -351,12 +362,17 @@ export default function MiStockHoyPage() {
                                 </button>
                                 <div>
                                     <h2 className="text-sm font-bold text-gray-800">
-                                        📅 {new Date(fechaSeleccionada).toLocaleDateString('es-BO', {
-                                            weekday: 'long',
-                                            day: 'numeric',
-                                            month: 'long',
-                                            year: 'numeric'
-                                        })}
+                                        📅 {(() => {
+                                            // ✅ Crear fecha asegurando que se interprete correctamente
+                                            const partes = fechaSeleccionada.split('-');
+                                            const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
+                                            return fecha.toLocaleDateString('es-BO', {
+                                                weekday: 'long',
+                                                day: 'numeric',
+                                                month: 'long',
+                                                year: 'numeric'
+                                            });
+                                        })()}
                                     </h2>
                                     <p className="text-sm text-gray-500">
                                         {cantidadProductos} productos registrados

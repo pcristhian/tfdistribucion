@@ -19,6 +19,9 @@ export default function Tabla({
     const diaActualRef = useRef(diaSeleccionado);
     const initializadoRef = useRef(false);
 
+    // ✅ Ref para almacenar los inputs y poder navegar
+    const inputRefs = useRef({});
+
     // ✅ Función para obtener los stocks actuales (para el modal)
     const getStocksActuales = useCallback(() => {
         return inputValues;
@@ -26,31 +29,69 @@ export default function Tabla({
 
     // ✅ Función para guardar todos los stocks en la BD
     const guardarTodosLosStocks = useCallback(async () => {
-        if (!onUpdateStock || !distribuidorId) return false;
+        if (!onUpdateStock || !distribuidorId) {
+            console.error('❌ Faltan dependencias:', {
+                onUpdateStock: !!onUpdateStock,
+                distribuidorId
+            });
+            return false;
+        }
 
-        const promises = [];
-        const productosAGuardar = [];
-
-        Object.keys(inputValues).forEach(key => {
-            const valor = inputValues[key];
-            if (valor !== null && valor !== undefined && valor > 0) {
-                promises.push(onUpdateStock(distribuidorId, key, valor));
-                productosAGuardar.push({ producto_id: key, stock: valor });
-            }
+        // Verificar si hay productos con stock para guardar
+        const productosConStock = Object.entries(inputValues).filter(([key, value]) => {
+            return value !== null && value !== undefined && value > 0;
         });
 
-        if (promises.length === 0) {
+        if (productosConStock.length === 0) {
+            console.log('ℹ️ No hay productos con stock para guardar');
             return true; // No hay nada que guardar
         }
 
-        try {
-            await Promise.all(promises);
-            console.log('✅ Stocks guardados:', productosAGuardar);
-            return true;
-        } catch (error) {
-            console.error('Error al guardar stocks:', error);
+        console.log('📦 Productos a guardar:', productosConStock);
+
+        const resultados = [];
+        const errores = [];
+
+        // ✅ Guardar uno por uno para mejor control
+        for (const [key, valor] of productosConStock) {
+            try {
+                // Validar que el valor sea un número válido
+                const stockValue = parseInt(valor);
+                if (isNaN(stockValue) || stockValue < 0) {
+                    console.warn(`⚠️ Valor inválido para producto ${key}:`, valor);
+                    errores.push(`Producto ${key}: valor inválido (${valor})`);
+                    continue;
+                }
+
+                console.log(`🔄 Guardando producto ${key} con stock ${stockValue}...`);
+
+                // ✅ Llamar a onUpdateStock con parámetros correctos
+                const result = await onUpdateStock(distribuidorId, key, stockValue);
+
+                if (result !== null && result !== undefined) {
+                    resultados.push({ producto_id: key, stock: stockValue });
+                    console.log(`✅ Producto ${key} guardado correctamente`);
+                } else {
+                    console.warn(`⚠️ Producto ${key} no se pudo guardar (resultado vacío)`);
+                    errores.push(`Producto ${key}: resultado vacío`);
+                }
+            } catch (error) {
+                console.error(`❌ Error al guardar producto ${key}:`, error);
+                errores.push(`Producto ${key}: ${error.message || 'Error desconocido'}`);
+            }
+        }
+
+        if (resultados.length === 0) {
+            console.error('❌ No se pudo guardar ningún producto:', errores);
             return false;
         }
+
+        if (errores.length > 0) {
+            console.warn('⚠️ Algunos productos no se guardaron:', errores);
+        }
+
+        console.log('✅ Stocks guardados exitosamente:', resultados);
+        return true;
     }, [inputValues, onUpdateStock, distribuidorId]);
 
     // ✅ Exponer funciones al padre
@@ -118,34 +159,136 @@ export default function Tabla({
         }));
     }, [esPasado]);
 
-    // Ordenar productos
-    const ordenarProductos = useCallback((data) => {
-        const ordenTarjetas = ['Viva', 'Entel', 'Tigo'];
-        const ordenChips = ['Entel', 'Viva', 'Tigo'];
+    // ✅ Manejar navegación con Enter
+    const handleKeyDown = useCallback((e, currentKey, filteredData) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
 
-        return [...data].sort((a, b) => {
-            const empresaA = a.empresa || '';
-            const empresaB = b.empresa || '';
+            // Encontrar el índice actual
+            const currentIndex = filteredData.findIndex(item => {
+                const key = item.producto_id || item.id;
+                return key === currentKey;
+            });
 
-            const esChipA = a.nombre?.toLowerCase().includes('chip') || false;
-            const esChipB = b.nombre?.toLowerCase().includes('chip') || false;
+            // Si no es el último, mover al siguiente
+            if (currentIndex < filteredData.length - 1) {
+                const nextItem = filteredData[currentIndex + 1];
+                const nextKey = nextItem.producto_id || nextItem.id;
+                const nextInput = inputRefs.current[nextKey];
 
-            if (esChipA && !esChipB) return 1;
-            if (!esChipA && esChipB) return -1;
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select(); // Seleccionar el texto para facilitar la edición
+                }
+            } else {
+                // Si es el último, enfocar el primer input (opcional)
+                const firstItem = filteredData[0];
+                const firstKey = firstItem.producto_id || firstItem.id;
+                const firstInput = inputRefs.current[firstKey];
+                if (firstInput) {
+                    firstInput.focus();
+                    firstInput.select();
+                }
+            }
+        }
+    }, []);
 
-            if (esChipA && esChipB) {
-                const indexA = ordenChips.indexOf(empresaA);
-                const indexB = ordenChips.indexOf(empresaB);
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                return (a.nombre || '').localeCompare(b.nombre || '');
+    const getOrdenPrioridad = useCallback((item) => {
+        const codigo = item.codigo || '';
+        const nombre = item.nombre || '';
+        const empresa = item.empresa || '';
+        const esChip = nombre.toLowerCase().includes('chip') || codigo.toLowerCase().includes('chip');
+
+        // Si es chip, va al final (grupo 4)
+        if (esChip) {
+            const codigoLower = codigo.toLowerCase();
+
+            // Orden específico para chips dentro del grupo de chips
+            if (codigoLower.includes('entel') || codigoLower.includes('che')) {
+                if (codigoLower.includes('recuperacion')) return 'chip_03_entel_recuperacion';
+                return 'chip_01_entel';
+            }
+            if (codigoLower.includes('tigo') || codigoLower.includes('cht')) {
+                return 'chip_02_tigo';
+            }
+            if (codigoLower.includes('viva') || codigoLower.includes('chv')) {
+                return 'chip_04_viva';
+            }
+            return 'chip_99_otros';
+        }
+
+        // Para tarjetas, obtener el valor numérico del código
+        const match = codigo.match(/(\d+)/);
+        const numero = match ? parseInt(match[1]) : 999;
+
+        // Definir el orden de las empresas (tarjetas primero)
+        const empresaKey = empresa.toLowerCase();
+
+        // Orden: 1-Viva, 2-Entel, 3-Tigo
+        let empresaOrden = 0;
+        if (empresaKey === 'viva') empresaOrden = 1;
+        else if (empresaKey === 'entel') empresaOrden = 2;
+        else if (empresaKey === 'tigo') empresaOrden = 3;
+        else empresaOrden = 99; // Otras empresas al final
+
+        // Para Viva, orden específico: v10, v20, v30, v50, p40, p100
+        if (empresaKey === 'viva') {
+            const codigoLower = codigo.toLowerCase();
+            const matchNum = codigoLower.match(/(\d+)/);
+            const num = matchNum ? parseInt(matchNum[1]) : 0;
+
+            const esV = codigoLower.startsWith('v');
+            const esP = codigoLower.startsWith('p');
+
+            let ordenInterno = 0;
+            if (esV) {
+                // v10=1, v20=2, v30=3, v50=4
+                const vOrder = [10, 20, 30, 50];
+                const vIndex = vOrder.indexOf(num);
+                ordenInterno = vIndex !== -1 ? vIndex + 1 : 5;
+            } else if (esP) {
+                // p40=5, p100=6
+                if (num === 40) ordenInterno = 5;
+                else if (num === 100) ordenInterno = 6;
+                else ordenInterno = 7;
+            } else {
+                ordenInterno = 8;
             }
 
-            const indexA = ordenTarjetas.indexOf(empresaA);
-            const indexB = ordenTarjetas.indexOf(empresaB);
-            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            // Formato: grupo1_viva_ordenInterno
+            return `01_viva_${String(ordenInterno).padStart(3, '0')}`;
+        }
+
+        // Para Entel, orden numérico ascendente
+        if (empresaKey === 'entel') {
+            const numStr = String(numero).padStart(4, '0');
+            return `02_entel_${numStr}`;
+        }
+
+        // Para Tigo, orden numérico ascendente
+        if (empresaKey === 'tigo') {
+            const numStr = String(numero).padStart(4, '0');
+            return `03_tigo_${numStr}`;
+        }
+
+        // Para otras empresas
+        return `99_${String(empresaOrden).padStart(2, '0')}_${codigo}`;
+    }, []);
+
+    // ✅ Ordenar productos con la nueva lógica
+    const ordenarProductos = useCallback((data) => {
+        return [...data].sort((a, b) => {
+            const prioridadA = getOrdenPrioridad(a);
+            const prioridadB = getOrdenPrioridad(b);
+
+            // Comparar por prioridad
+            if (prioridadA < prioridadB) return -1;
+            if (prioridadA > prioridadB) return 1;
+
+            // Si tienen la misma prioridad, ordenar por nombre
             return (a.nombre || '').localeCompare(b.nombre || '');
         });
-    }, []);
+    }, [getOrdenPrioridad]);
 
     // ✅ Combinar productos disponibles con el stock local
     const combinedData = useMemo(() => {
@@ -338,9 +481,17 @@ export default function Tabla({
                                             <td className="px-4 py-2 text-center">
                                                 <div className="flex items-center justify-center gap-1">
                                                     <input
+                                                        ref={el => {
+                                                            if (el) {
+                                                                inputRefs.current[key] = el;
+                                                            } else {
+                                                                delete inputRefs.current[key];
+                                                            }
+                                                        }}
                                                         type="number"
                                                         value={displayValue}
                                                         onChange={(e) => handleInputChange(item, e.target.value)}
+                                                        onKeyDown={(e) => handleKeyDown(e, key, filteredData)}
                                                         className={`w-24 px-2 py-1.5 text-center border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-medium ${esPasado
                                                             ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200'
                                                             : tieneStock
@@ -350,6 +501,8 @@ export default function Tabla({
                                                         min="0"
                                                         disabled={esPasado}
                                                         placeholder="0"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
                                                     />
                                                     {tieneStock && !esPasado && (
                                                         <span className="text-green-500 text-xs">✓</span>

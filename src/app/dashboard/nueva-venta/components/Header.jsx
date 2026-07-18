@@ -1,4 +1,3 @@
-// app/dashboard/nueva-venta/components/Header.jsx
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -38,7 +37,7 @@ export default function Header({ titulo = 'Nueva Venta' }) {
         }
     }, [user?.id, getDiaActivo]);
 
-    // Formatear fecha: "lun 07"
+    // ✅ Formatear fecha actual: "lun 18"
     const formatearFecha = () => {
         const fecha = new Date();
         const diasSemana = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -47,14 +46,28 @@ export default function Header({ titulo = 'Nueva Venta' }) {
         return `${diaSemana} ${dia}`;
     };
 
-    // Formatear fecha del día activo (corta)
-    const formatearFechaActiva = (fecha) => {
-        if (!fecha) return null;
-        const fechaObj = new Date(fecha);
+    // ✅ Formatear fecha del día activo (YYYY-MM-DD a "lun 18")
+    const formatearFechaActiva = (fechaStr) => {
+        if (!fechaStr) return null;
+        // ✅ Crear fecha desde string YYYY-MM-DD sin problemas de zona horaria
+        const partes = fechaStr.split('-');
+        const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
         const diasSemana = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-        const diaSemana = diasSemana[fechaObj.getDay()];
-        const dia = String(fechaObj.getDate()).padStart(2, '0');
+        const diaSemana = diasSemana[fecha.getDay()];
+        const dia = String(fecha.getDate()).padStart(2, '0');
         return `${diaSemana} ${dia}`;
+    };
+
+    // ✅ Formatear fecha del día activo completa (para mostrar en mobile)
+    const formatearFechaActivaCompleta = (fechaStr) => {
+        if (!fechaStr) return null;
+        const partes = fechaStr.split('-');
+        const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
+        return fecha.toLocaleDateString('es-BO', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short'
+        });
     };
 
     // Obtener iniciales del nombre
@@ -66,6 +79,7 @@ export default function Header({ titulo = 'Nueva Venta' }) {
     };
 
     const fechaActivaFormateada = fechaActiva ? formatearFechaActiva(fechaActiva) : null;
+    const fechaActivaCompleta = fechaActiva ? formatearFechaActivaCompleta(fechaActiva) : null;
 
     return (
         <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-600 to-blue-700 px-2 py-1.5 shadow-lg">
@@ -135,15 +149,15 @@ export default function Header({ titulo = 'Nueva Venta' }) {
             </div>
 
             {/* Indicador de estado del día - solo visible en mobile */}
-            {!cargando && fechaActivaFormateada && (
+            {!cargando && fechaActivaCompleta && (
                 <div className="md:hidden mt-1 flex items-center justify-center gap-1.5">
                     <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse"></span>
                     <span className="text-[9px] text-green-200/80 font-medium">
-                        Día activo: {fechaActivaFormateada}
+                        Día activo: {fechaActivaCompleta}
                     </span>
                 </div>
             )}
-            {!cargando && !fechaActivaFormateada && (
+            {!cargando && !fechaActivaCompleta && (
                 <div className="md:hidden mt-1 flex items-center justify-center gap-1.5">
                     <span className="text-[9px] text-yellow-200/80 font-medium">
                         ⚠️ No hay día activo

@@ -336,9 +336,18 @@ export function useStockDiario() {
 
             setSuccess(true);
             return data;
+            // En useStockDiario.js - función actualizarStockProducto
         } catch (error) {
             console.error('Error al actualizar stock:', error);
-            setError(error.message);
+            // ✅ Mejorar el mensaje de error
+            let errorMessage = error.message || 'Error desconocido';
+            if (error.code) {
+                errorMessage += ` (Código: ${error.code})`;
+            }
+            if (error.details) {
+                errorMessage += ` - ${error.details}`;
+            }
+            setError(errorMessage);
             return null;
         } finally {
             setLoading(false);

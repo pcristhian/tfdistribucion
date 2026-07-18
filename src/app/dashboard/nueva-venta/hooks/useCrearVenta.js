@@ -9,7 +9,7 @@ export function useCrearVenta() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // ✅ Validar datos de la venta
+    // ✅ Validar datos de la venta (cliente y ruta son opcionales)
     const validarVenta = useCallback((data) => {
         const errores = [];
 
@@ -17,13 +17,15 @@ export function useCrearVenta() {
             errores.push('El distribuidor es requerido');
         }
 
-        if (!data.cliente_id) {
-            errores.push('El cliente es requerido');
-        }
+        // ✅ Cliente es opcional - solo validamos si tiene cliente_nombre
+        // if (!data.cliente_id) {
+        //     errores.push('El cliente es requerido');
+        // }
 
-        if (!data.ruta_id) {
-            errores.push('La ruta es requerida');
-        }
+        // ✅ Ruta es opcional
+        // if (!data.ruta_id) {
+        //     errores.push('La ruta es requerida');
+        // }
 
         if (!data.producto_id) {
             errores.push('El producto es requerido');
@@ -115,8 +117,9 @@ export function useCrearVenta() {
                 precio_unitario: data.precio_unitario,
                 descuento: data.descuento || 0,
                 total: (data.precio_unitario * data.cantidad) - (data.descuento || 0),
-                cliente_id: data.cliente_id,
-                cliente_nombre: data.cliente_nombre || '',
+                cliente_id: data.cliente_id || null, // Puede ser null
+                cliente_nombre: data.cliente_nombre || 'Cliente Mostrador',
+                ruta_id: data.ruta_id || null, // Puede ser null
                 fecha: new Date().toISOString()
             };
 
@@ -164,8 +167,8 @@ export function useCrearVenta() {
             // 7. Registrar la venta en la tabla ventas
             const ventaData = {
                 distribuidor_id: data.distribuidor_id,
-                cliente_id: data.cliente_id,
-                ruta_id: data.ruta_id,
+                cliente_id: data.cliente_id || null, // Puede ser null
+                ruta_id: data.ruta_id || null, // Puede ser null
                 producto_id: data.producto_id,
                 stock_diario_id: stockDiario.id,
                 cantidad: data.cantidad,
@@ -213,15 +216,15 @@ export function useCrearVenta() {
             for (const item of items) {
                 const ventaData = {
                     distribuidor_id: distribuidorId,
-                    cliente_id: clienteId,
-                    ruta_id: rutaId,
+                    cliente_id: clienteId || null, // Puede ser null
+                    ruta_id: rutaId || null, // Puede ser null
                     producto_id: item.producto_id,
                     cantidad: item.cantidad,
                     precio_unitario: item.precio_unitario,
                     descuento: item.descuento || 0,
                     stock_disponible: item.stock_disponible,
                     observacion: observacion,
-                    cliente_nombre: item.cliente_nombre
+                    cliente_nombre: item.cliente_nombre || 'Cliente Mostrador'
                 };
 
                 const result = await registrarVenta(ventaData);

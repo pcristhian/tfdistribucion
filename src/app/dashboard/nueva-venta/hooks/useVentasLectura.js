@@ -111,6 +111,7 @@ export function useVentasLectura() {
                     nombre: info?.nombre || item.nombre || 'Producto no encontrado',
                     codigo: info?.codigo || item.codigo || '',
                     empresa: info?.empresa || { nombre: item.empresa || '', color_primario: item.empresa_color || '#6366f1' },
+                    precio_base: info?.precio_base || item.precio_base || 0,
                 };
             });
 
@@ -128,6 +129,54 @@ export function useVentasLectura() {
             setLoading(false);
         }
     }, [getDiaActivo, verificarMultiplesDiasActivos]);
+
+    // ✅ Obtener precio de un producto específico según la ruta
+    const getPrecioProductoPorRuta = useCallback(async (productoId, rutaId) => {
+        try {
+            if (!productoId) return 0;
+
+            // Si no hay ruta, usar precio_base del producto
+            if (!rutaId) {
+                const { data, error } = await supabase
+                    .from('productos')
+                    .select('precio_base')
+                    .eq('id', productoId)
+                    .single();
+
+                if (error) throw error;
+                return data?.precio_base || 0;
+            }
+
+            // Buscar precio en precios_ruta
+            const { data, error } = await supabase
+                .from('precios_ruta')
+                .select('precio_base, precio_minimo, precio_costo')
+                .eq('ruta_id', rutaId)
+                .eq('producto_id', productoId)
+                .maybeSingle();
+
+            if (error) throw error;
+
+            // Si existe precio para esta ruta, usarlo
+            if (data) {
+                return data.precio_base;
+            }
+
+            // Si no existe, usar precio_base del producto
+            const { data: producto, error: prodError } = await supabase
+                .from('productos')
+                .select('precio_base')
+                .eq('id', productoId)
+                .single();
+
+            if (prodError) throw prodError;
+            return producto?.precio_base || 0;
+
+        } catch (error) {
+            console.error('Error al obtener precio por ruta:', error);
+            return 0;
+        }
+    }, []);
 
     // 📊 Obtener precios por ruta para los productos
     const getPreciosPorRuta = useCallback(async (rutaId, productoIds) => {
@@ -187,9 +236,22 @@ export function useVentasLectura() {
             const productoIds = stockData.productos.map(p => p.producto_id);
             const precios = await getPreciosPorRuta(rutaId, productoIds);
 
-            // 4. Combinar productos con precios
-            const productosConPrecio = stockData.productos.map(producto => {
+            // 4. Para productos sin precio en ruta, obtener precio_base del producto
+            const productosConPrecio = await Promise.all(stockData.productos.map(async (producto) => {
                 const precioRuta = precios[producto.producto_id];
+
+                // Si no hay precio en ruta, obtener el precio_base del producto
+                if (!precioRuta && rutaId) {
+                    const precioBase = await getPrecioProductoPorRuta(producto.producto_id, rutaId);
+                    return {
+                        ...producto,
+                        precio_venta: precioBase,
+                        precio_minimo: producto.precio_minimo || null,
+                        precio_costo: producto.precio_costo || 0,
+                        tiene_precio_personalizado: false
+                    };
+                }
+
                 return {
                     ...producto,
                     precio_venta: precioRuta?.precio_base || producto.precio_base || 0,
@@ -197,7 +259,7 @@ export function useVentasLectura() {
                     precio_costo: precioRuta?.precio_costo || producto.precio_costo || 0,
                     tiene_precio_personalizado: !!precioRuta
                 };
-            });
+            }));
 
             return {
                 ...stockData,
@@ -212,7 +274,7 @@ export function useVentasLectura() {
         } finally {
             setLoading(false);
         }
-    }, [getProductosConStock, getPreciosPorRuta]);
+    }, [getProductosConStock, getPreciosPorRuta, getPrecioProductoPorRuta]);
 
     // 📊 Obtener clientes por ruta
     const getClientesPorRuta = useCallback(async (rutaId) => {
@@ -306,6 +368,7 @@ export function useVentasLectura() {
         getDiaActivo,
         verificarMultiplesDiasActivos,
         getProductosConStock,
+        getPrecioProductoPorRuta, // ✅ Nueva función
         getPreciosPorRuta,
         getDatosParaVentas,
         getClientesPorRuta,

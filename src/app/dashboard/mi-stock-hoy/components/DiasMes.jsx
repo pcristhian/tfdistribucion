@@ -8,29 +8,33 @@ export default function DiasMes({
     distribuidorId,
     onSelectDia,
     diaSeleccionado = null,
-    onDiaActivo // ✅ Nuevo callback para saber qué día está activo
+    onDiaActivo
 }) {
     const [diasDelMes, setDiasDelMes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [diasConDatos, setDiasConDatos] = useState([]);
-    const [diaActivo, setDiaActivo] = useState(null); // ✅ Estado del día activo
+    const [diaActivo, setDiaActivo] = useState(null);
     const [mesActual, setMesActual] = useState('');
     const [anoActual, setAnoActual] = useState('');
     const [fechaHoy, setFechaHoy] = useState('');
 
-    // Obtener días del mes actual
+    // ✅ Obtener días del mes actual - USANDO LA MISMA LÓGICA QUE EL HEADER
     useEffect(() => {
-        const fecha = new Date();
-        const year = fecha.getFullYear();
-        const month = fecha.getMonth();
-        const hoy = fecha.getDate();
+        // Usar la fecha actual del navegador (igual que el header)
+        const ahora = new Date();
+        const year = ahora.getFullYear();
+        const month = ahora.getMonth();
+        const hoy = ahora.getDate();
 
+        // Formatear fecha como YYYY-MM-DD (igual que en la BD)
         const hoyStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(hoy).padStart(2, '0')}`;
         setFechaHoy(hoyStr);
 
-        setMesActual(fecha.toLocaleString('es-BO', { month: 'long' }));
+        // Formatear mes y año en español
+        setMesActual(ahora.toLocaleString('es-BO', { month: 'long' }));
         setAnoActual(year.toString());
 
+        // Obtener todos los días del mes
         const totalDias = new Date(year, month + 1, 0).getDate();
 
         const dias = [];
