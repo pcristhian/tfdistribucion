@@ -104,34 +104,6 @@ export default function ViachaTilata() {
                     titulo="Productos en Stock"
                 />
 
-                {/* Resumen */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    className="mt-6 bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-2 sm:grid-cols-4 gap-4"
-                >
-                    <div>
-                        <p className="text-xs text-gray-500">Total Productos</p>
-                        <p className="text-lg font-bold text-gray-800">{productos.length}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-gray-500">Stock Total</p>
-                        <p className="text-lg font-bold text-gray-800">
-                            {productos.reduce((sum, p) => sum + (p.stock || 0), 0)}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-gray-500">Valor Total</p>
-                        <p className="text-lg font-bold text-blue-600">
-                            Bs. {productos.reduce((sum, p) => sum + ((p.stock || 0) * (p.precio_base || 0)), 0).toFixed(2)}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-gray-500">Estado</p>
-                        <p className="text-lg font-bold text-green-600">Activo</p>
-                    </div>
-                </motion.div>
             </main>
         </div>
     );

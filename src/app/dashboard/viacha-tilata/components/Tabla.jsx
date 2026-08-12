@@ -217,12 +217,12 @@ export default function Tabla({
                                         className={`hover:bg-gray-50 transition-colors text-black ${tieneStock ? 'bg-green-50/30' : ''}`}
                                     >
                                         {/* Código - Input editable */}
-                                        <td className="px-1 py-1">
+                                        <td className="px-1 py-1 text-black">
                                             <input
                                                 type="text"
                                                 value={codigo}
                                                 onChange={(e) => handleCodigoChange(fila.id, e.target.value)}
-                                                className={`w-15 px-2 py-1 border rounded text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${productoEncontrado ? 'border-green-400 bg-green-50' : 'border-gray-300'
+                                                className={`w-15 px-1 py-1 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${productoEncontrado ? 'border-green-400 bg-green-50' : 'border-gray-300'
                                                     }`}
                                                 placeholder="Ej:V10"
                                                 autoFocus={index === 0}
@@ -239,17 +239,17 @@ export default function Tabla({
                                                 type="number"
                                                 value={cantidad || ''}
                                                 onChange={(e) => handleCantidadChange(fila.id, e.target.value)}
-                                                className={`w-15 px-2 py-1 text-center border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${enLimite ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
+                                                className={`w-15 px-1 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${enLimite ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
                                                     } ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                 min="0"
                                                 placeholder="0"
                                                 disabled={!productoEncontrado}
                                             />
-                                            {enLimite && productoEncontrado && (
+                                            {/* {enLimite && productoEncontrado && (
                                                 <div className="text-[10px] text-amber-600 font-semibold mt-0.5">
                                                     ✅ Límite alcanzado
                                                 </div>
-                                            )}
+                                            )} */}
                                         </td>
 
                                         {/* Precio Unitario */}
@@ -326,17 +326,8 @@ export default function Tabla({
                             <td className="px-4 py-3 text-gray-600" colSpan="2">
                                 Totales
                             </td>
-                            <td className="px-4 py-3 text-center text-blue-600">
-                                {formatNumber(cantidadTotal)}
-                            </td>
-                            <td className="px-4 py-3 text-center text-gray-400 text-xs">
-                                -
-                            </td>
                             <td className="px-4 py-3 text-right text-blue-600 text-base">
                                 {formatPrice(totalGeneral)}
-                            </td>
-                            <td className="px-4 py-3 text-center text-xs text-gray-400">
-                                {filas.length} filas
                             </td>
                         </tr>
                     </tfoot>
