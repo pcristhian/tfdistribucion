@@ -1,16 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useLogin } from './login/hook/useLogin';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function HomePage() {
-  const { getUser } = useLogin();
-  const router = useRouter();
-  const user = getUser();
   const [isInstalled, setIsInstalled] = useState(false);
-  const [wasInstalled, setWasInstalled] = useState(false); // ✅ NUEVO
+  const [wasInstalled, setWasInstalled] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isIOS, setIsIOS] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -33,10 +28,9 @@ export default function HomePage() {
 
     window.addEventListener('beforeinstallprompt', handler);
 
-    // ✅ CUANDO SE INSTALA LA APP
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true);
-      setWasInstalled(true); // ✅ MARCAR QUE SE INSTALÓ
+      setWasInstalled(true);
     });
 
     return () => {
@@ -44,26 +38,13 @@ export default function HomePage() {
     };
   }, []);
 
-  // ✅ SOLO REDIRIGIR SI ESTÁ INSTALADA Y NO SE ACABA DE INSTALAR
-  useEffect(() => {
-    if (!loading && isInstalled && !wasInstalled) {
-      setTimeout(() => {
-        if (user) {
-          router.push('/dashboard');
-        } else {
-          router.push('/login');
-        }
-      }, 500);
-    }
-  }, [isInstalled, wasInstalled, user, router, loading]);
-
   const handleInstall = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         setIsInstalled(true);
-        setWasInstalled(true); // ✅ MARCAR QUE SE INSTALÓ
+        setWasInstalled(true);
       }
       setDeferredPrompt(null);
     }
@@ -131,10 +112,10 @@ export default function HomePage() {
     );
   }
 
-  // ✅ SI ESTÁ INSTALADA DESDE ANTES → REDIRIGIR AL LOGIN/DASHBOARD
+  // ✅ SI ESTÁ INSTALADA DESDE ANTES → MOSTRAR MENSAJE
   if (isInstalled) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700 p-4">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -144,15 +125,24 @@ export default function HomePage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="text-white ml-4 text-lg font-medium"
+          className="text-white mt-4 text-lg font-medium"
         >
-          Cargando...
+          App instalada. ¡Disfruta!
         </motion.p>
+        <motion.button
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          onClick={() => window.location.reload()}
+          className="mt-4 text-white/70 text-sm hover:text-white transition-colors"
+        >
+          Recargar
+        </motion.button>
       </div>
     );
   }
 
-  // ✅ SOLO PANTALLA DE INSTALACIÓN (NAVEGADOR NORMAL)
+  // ✅ PANTALLA DE INSTALACIÓN (NAVEGADOR NORMAL)
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Burbujas de fondo */}
