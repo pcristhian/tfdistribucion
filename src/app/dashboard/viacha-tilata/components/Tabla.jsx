@@ -164,7 +164,7 @@ export default function Tabla({
     return (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {/* Título */}
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <div className="px-1 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
                 <span className="text-xs text-gray-500">
                     {filas.length} productos
@@ -176,22 +176,19 @@ export default function Tabla({
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Código
+                            <th className="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Cód
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Producto
+                            <th className="px-1 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Cant
                             </th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Cantidad
+                            <th className="px-1 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Precio
                             </th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Precio Unit.
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-1 py-1 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Total
                             </th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-1 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Acción
                             </th>
                         </tr>
@@ -220,14 +217,14 @@ export default function Tabla({
                                         className={`hover:bg-gray-50 transition-colors text-black ${tieneStock ? 'bg-green-50/30' : ''}`}
                                     >
                                         {/* Código - Input editable */}
-                                        <td className="px-4 py-3">
+                                        <td className="px-1 py-1">
                                             <input
                                                 type="text"
                                                 value={codigo}
                                                 onChange={(e) => handleCodigoChange(fila.id, e.target.value)}
-                                                className={`w-24 px-2 py-1 border rounded text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${productoEncontrado ? 'border-green-400 bg-green-50' : 'border-gray-300'
+                                                className={`w-15 px-2 py-1 border rounded text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${productoEncontrado ? 'border-green-400 bg-green-50' : 'border-gray-300'
                                                     }`}
-                                                placeholder="Ej: V10"
+                                                placeholder="Ej:V10"
                                                 autoFocus={index === 0}
                                             />
                                             {!productoEncontrado && codigo && (
@@ -236,28 +233,13 @@ export default function Tabla({
                                                 </div>
                                             )}
                                         </td>
-
-                                        {/* Producto - Solo lectura */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex flex-col">
-                                                <span className={`text-sm font-medium ${productoEncontrado ? 'text-gray-800' : 'text-gray-400'}`}>
-                                                    {producto ? producto.nombre : '-'}
-                                                </span>
-                                                {tieneLimite && productoEncontrado && (
-                                                    <span className="text-[10px] text-gray-500">
-                                                        Límite: {formatNumber(producto.limite)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-
                                         {/* Cantidad - Input editable */}
-                                        <td className="px-4 py-3 text-center text-black">
+                                        <td className="px-1 py-1 text-center text-black">
                                             <input
                                                 type="number"
                                                 value={cantidad || ''}
                                                 onChange={(e) => handleCantidadChange(fila.id, e.target.value)}
-                                                className={`w-20 px-2 py-1 text-center border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${enLimite ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
+                                                className={`w-15 px-2 py-1 text-center border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${enLimite ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
                                                     } ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                 min="0"
                                                 placeholder="0"
@@ -271,7 +253,7 @@ export default function Tabla({
                                         </td>
 
                                         {/* Precio Unitario */}
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-1 py-1 text-center">
                                             <div className="flex flex-col items-center">
                                                 <span className={`text-sm font-bold ${enLimite ? 'text-amber-600' : 'text-gray-700'
                                                     } ${!productoEncontrado ? 'text-gray-400' : ''}`}>
@@ -289,9 +271,8 @@ export default function Tabla({
                                                 )}
                                             </div>
                                         </td>
-
                                         {/* Total - Cálculo en tiempo real */}
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="px-1 py-1 text-right">
                                             <span className={`font-bold ${tieneStock ? 'text-blue-600' : 'text-gray-400'}`}>
                                                 {productoEncontrado ? formatPrice(total) : '-'}
                                             </span>
@@ -303,7 +284,7 @@ export default function Tabla({
                                         </td>
 
                                         {/* Acción - Eliminar (deshabilitado si es la única fila) */}
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-1 py-2 text-center">
                                             <button
                                                 onClick={() => eliminarFila(fila.id)}
                                                 disabled={esUnicaFila}
