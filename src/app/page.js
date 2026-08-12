@@ -1,304 +1,237 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [wasInstalled, setWasInstalled] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [isIOS, setIsIOS] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showContent, setShowContent] = useState(false);
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    setIsIOS(isIOSDevice);
-
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    setIsInstalled(isStandalone);
-    setLoading(false);
-
-    setTimeout(() => setShowContent(true), 300);
-
-    const handler = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    window.addEventListener('appinstalled', () => {
-      setIsInstalled(true);
-      setWasInstalled(true);
-    });
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-    };
+    // Carga inicial
+    setTimeout(() => {
+      setIsLoading(false);
+      setShowMenu(true);
+    }, 600);
   }, []);
 
-  const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setIsInstalled(true);
-        setWasInstalled(true);
-      }
-      setDeferredPrompt(null);
+  // Opciones del menú
+  const locations = [
+    {
+      id: 'viacha-tilata',
+      nombre: 'Viacha - Tilata',
+      icono: '🏘️',
+      color: 'from-blue-500 to-blue-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-blue-200',
+      hoverBorder: 'hover:border-blue-500',
+      descripcion: 'Zona norte',
+      ruta: '/dashboard/viacha-tilata' // ✅ Ruta explícita
+    },
+    {
+      id: 'desaguadero',
+      nombre: 'Desaguadero',
+      icono: '🌊',
+      color: 'from-cyan-500 to-cyan-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-cyan-200',
+      hoverBorder: 'hover:border-cyan-500',
+      descripcion: 'Zona oeste',
+      ruta: '/dashboard/desaguadero'
+    },
+    {
+      id: 'pueblos',
+      nombre: 'Pueblos',
+      icono: '🏡',
+      color: 'from-amber-500 to-amber-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-amber-200',
+      hoverBorder: 'hover:border-amber-500',
+      descripcion: 'Zona rural',
+      ruta: '/dashboard/pueblos'
+    },
+    {
+      id: 'corocoro',
+      nombre: 'Corocoro',
+      icono: '⛏️',
+      color: 'from-emerald-500 to-emerald-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-emerald-200',
+      hoverBorder: 'hover:border-emerald-500',
+      descripcion: 'Zona minera',
+      ruta: '/dashboard/corocoro'
     }
+  ];
+
+  const handleSelectLocation = (location) => {
+    // Guardar en localStorage
+    localStorage.setItem('ubicacion', location.nombre);
+    localStorage.setItem('ubicacionId', location.id);
+
+    // Mostrar overlay
+    setSelectedLocation(location);
+
+    // Redirigir después de la animación
+    setTimeout(() => {
+      router.push(location.ruta); // ✅ Usando la ruta explícita
+    }, 500);
   };
 
-  if (loading) {
+  // Pantalla de carga
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="rounded-full h-16 w-16 border-4 border-white border-t-transparent"
-        />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-sm text-gray-500 mt-4">Cargando...</p>
+        </div>
       </div>
     );
   }
 
-  // ✅ SI SE ACABA DE INSTALAR → MOSTRAR MENSAJE DE ÉXITO
-  if (wasInstalled) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center"
-        >
-          <motion.div
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 0.5, repeat: 2 }}
-            className="text-7xl mb-6"
-          >
-            🎉
-          </motion.div>
-
-          <h2 className="text-2xl font-bold text-gray-800 mb-3">
-            ¡App instalada con éxito!
-          </h2>
-
-          <p className="text-gray-600 mb-6">
-            Ahora puedes abrir <strong>Torre Fuerte</strong> desde el ícono en tu pantalla de inicio.
-          </p>
-
-          <div className="bg-blue-50 rounded-xl p-4 mb-6 text-left">
-            <p className="text-sm text-blue-800 font-medium">📱 ¿Cómo abrir la app?</p>
-            <ul className="text-xs text-blue-700 mt-2 space-y-1">
-              <li>• Busca el ícono 🏰 en tu pantalla de inicio</li>
-              <li>• Toca el ícono para abrir la aplicación</li>
-              <li>• Inicia sesión y disfruta</li>
-            </ul>
-          </div>
-
-          <p className="text-xs text-gray-400">
-            Esta pantalla se cerrará automáticamente al abrir la app desde el ícono
-          </p>
-
-          <button
-            onClick={() => window.close()}
-            className="mt-4 text-xs text-blue-500 hover:text-blue-700"
-          >
-            Cerrar esta ventana
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // ✅ SI ESTÁ INSTALADA DESDE ANTES → MOSTRAR MENSAJE
-  if (isInstalled) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700 p-4">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="rounded-full h-16 w-16 border-4 border-white border-t-transparent"
-        />
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-white mt-4 text-lg font-medium"
-        >
-          App instalada. ¡Disfruta!
-        </motion.p>
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          onClick={() => window.location.reload()}
-          className="mt-4 text-white/70 text-sm hover:text-white transition-colors"
-        >
-          Recargar
-        </motion.button>
-      </div>
-    );
-  }
-
-  // ✅ PANTALLA DE INSTALACIÓN (NAVEGADOR NORMAL)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Burbujas de fondo */}
-      <div className="absolute inset-0 overflow-hidden">
-        <motion.div
-          animate={{ y: [0, -30, 0], x: [0, 20, -20, 0] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-20 -left-20 w-72 h-72 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"
-        />
-        <motion.div
-          animate={{ y: [0, 40, 0], x: [0, -30, 30, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -bottom-20 -right-20 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"
-        />
-        <motion.div
-          animate={{ y: [0, -25, 0], x: [0, -15, 15, 0] }}
-          transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl opacity-10"
-        />
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-10"
+      >
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏰</span>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-800">Torre Fuerte</h1>
+              <p className="text-xs text-gray-500">Seleccione ubicación</p>
+            </div>
+          </div>
+          <div className="text-xs text-gray-400">
+            {new Date().toLocaleDateString('es-ES', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })}
+          </div>
+        </div>
+      </motion.header>
 
-      <AnimatePresence>
-        {showContent && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="max-w-md w-full bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 text-center relative z-10"
-          >
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Título */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="mb-8"
+        >
+          <h2 className="text-2xl font-bold text-gray-800">
+            Seleccione una ubicación
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Elija la zona donde trabajará hoy
+          </p>
+        </motion.div>
+
+        {/* Grid de ubicaciones */}
+        <AnimatePresence>
+          {showMenu && (
             <motion.div
-              animate={{ y: [0, -20, 0], rotate: [0, 5, -5, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="text-8xl mb-6 inline-block"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4 }}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
             >
-              🏰
-            </motion.div>
-
-            <h1 className="text-4xl font-bold text-gray-800 mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Torre Fuerte
-            </h1>
-
-            <p className="text-gray-600 mb-2 text-lg">
-              Instala la aplicación para continuar
-            </p>
-
-            <div className="h-1 w-20 bg-gradient-to-r from-blue-500 to-purple-500 mx-auto rounded-full mb-6" />
-
-            <p className="text-sm text-gray-400 mb-8">
-              Disfruta de una experiencia completa y sin interrupciones
-            </p>
-
-            {isIOS ? (
-              <div className="space-y-4">
-                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
-                  <p className="text-sm text-yellow-800 font-medium">
-                    📱 Para instalar en iOS:
-                  </p>
-                  <ol className="text-xs text-yellow-700 text-left mt-2 space-y-2">
-                    <li className="flex items-center gap-2">
-                      <span className="bg-yellow-200 text-yellow-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
-                      Toca el ícono de compartir <span className="font-bold text-base">⎙</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="bg-yellow-200 text-yellow-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
-                      Desliza hacia abajo y selecciona <span className="font-bold">"Agregar a pantalla de inicio"</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="bg-yellow-200 text-yellow-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
-                      Toca <span className="font-bold">"Agregar"</span>
-                    </li>
-                  </ol>
-                </div>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-medium"
-                >
-                  🔄 Verificar instalación
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
+              {locations.map((location, index) => (
                 <motion.button
-                  whileHover={{ scale: 1.05, boxShadow: "0 20px 40px -10px rgba(59, 130, 246, 0.5)" }}
-                  whileTap={{ scale: 0.95 }}
-                  animate={{
-                    scale: [1, 1.02, 1],
-                    boxShadow: [
-                      "0 10px 30px -10px rgba(59, 130, 246, 0.3)",
-                      "0 20px 50px -10px rgba(59, 130, 246, 0.6)",
-                      "0 10px 30px -10px rgba(59, 130, 246, 0.3)"
-                    ]
-                  }}
+                  key={location.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    scale: { duration: 2, repeat: Infinity, ease: "easeInOut" },
-                    boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                    delay: 0.1 + (index * 0.08),
+                    duration: 0.4
                   }}
-                  onClick={handleInstall}
-                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-5 rounded-xl font-bold text-lg relative overflow-hidden"
+                  whileHover={{
+                    scale: 1.02,
+                    boxShadow: "0 8px 25px -8px rgba(0,0,0,0.15)"
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleSelectLocation(location)}
+                  className={`
+                    ${location.bgColor}
+                    border-2 ${location.borderColor} ${location.hoverBorder}
+                    rounded-xl 
+                    transition-all duration-200
+                    flex items-center gap-4
+                    p-5
+                    text-left
+                    group
+                    cursor-pointer
+                  `}
                 >
-                  <motion.span
-                    animate={{ x: ["-100%", "100%"] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12"
-                  />
-                  <span className="relative flex items-center justify-center gap-3">
-                    <motion.span
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                      className="text-3xl"
-                    >
-                      ⬇️
-                    </motion.span>
-                    <span>Instalar App</span>
-                    <motion.span
-                      animate={{ opacity: [1, 0.5, 1] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className="text-sm font-normal"
-                    >
-                      (Gratis)
-                    </motion.span>
+                  <span className="text-4xl flex-shrink-0">
+                    {location.icono}
+                  </span>
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-semibold text-gray-800">
+                      {location.nombre}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      {location.descripcion}
+                    </p>
+                  </div>
+
+                  <span className="text-gray-300 group-hover:text-gray-500 transition-colors">
+                    →
                   </span>
                 </motion.button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                <p className="text-xs text-gray-400">
-                  Haz clic en el botón para instalar la aplicación
-                </p>
+        {/* Footer */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4, duration: 0.4 }}
+          className="mt-8 pt-6 border-t border-gray-200 flex items-center justify-between text-xs text-gray-400"
+        >
+          <span>Versión 1.0</span>
+          <span>© {new Date().getFullYear()} Torre Fuerte</span>
+        </motion.div>
+      </main>
 
-                <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <motion.div
-                    animate={{ width: ["0%", "70%", "100%"] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full"
-                  />
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-6 text-xs text-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-1 mx-auto"
+      {/* Overlay de selección */}
+      <AnimatePresence>
+        {selectedLocation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 text-center"
             >
-              <motion.span
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                className="text-base inline-block"
-              >
-                🔄
-              </motion.span>
-              ¿Ya instalaste? Haz clic aquí para verificar
-            </button>
-
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <p className="text-[10px] text-gray-400">
-                Versión 1.0 • Torre Fuerte • {new Date().getFullYear()}
+              <div className="text-4xl mb-3">{selectedLocation.icono}</div>
+              <h3 className="text-lg font-semibold text-gray-800">
+                {selectedLocation.nombre}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Cargando panel de trabajo...
               </p>
-            </div>
+              <div className="mt-4 flex justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
