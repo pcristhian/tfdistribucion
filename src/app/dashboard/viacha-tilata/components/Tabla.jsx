@@ -60,7 +60,7 @@ export default function Tabla({
 
     // Formatear números
     const formatPrice = (value) => {
-        return `Bs. ${parseFloat(value || 0).toFixed(2)}`;
+        return `${parseFloat(value || 0).toFixed(2)}`;
     };
 
     const formatNumber = (value) => {
@@ -169,36 +169,24 @@ export default function Tabla({
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Título */}
-            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
-                <span className="text-xs text-gray-500">
-                    {filas.length} productos
-                </span>
-            </div>
-
-            {/* Tabla */}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Cant. Inicial
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
+                                Sa. Inicial
                             </th>
-                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500  tracking-wider">
                                 Código
                             </th>
-                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Cant. Devuelta
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
+                                Sa. Final
                             </th>
-                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Vendidas
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
+                                Ventas
                             </th>
-                            <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-2 py-2 text-right text-xs font-medium text-gray-500  tracking-wider">
                                 Total
-                            </th>
-                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Acción
                             </th>
                         </tr>
                     </thead>
@@ -226,7 +214,7 @@ export default function Tabla({
                                         className={`hover:bg-gray-50 transition-colors ${tieneStock ? 'bg-green-50/30' : ''}`}
                                     >
                                         {/* Cantidad Inicial - Input */}
-                                        <td className="px-2 py-2 text-center">
+                                        <td className="px-2 py-1 text-center text-black">
                                             <input
                                                 type="number"
                                                 value={cantidadInicial || ''}
@@ -240,7 +228,7 @@ export default function Tabla({
                                         </td>
 
                                         {/* Código - Click para mostrar precio */}
-                                        <td className="px-2 py-2">
+                                        <td className="px-2 py-1">
                                             <div
                                                 className="cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors inline-block"
                                                 onClick={() => handleCodigoClick(fila.id)}
@@ -249,25 +237,24 @@ export default function Tabla({
                                                     {productoEncontrado ? producto.codigo : '-'}
                                                 </span>
                                                 {productoEncontrado && mostrarPrecio && (
-                                                    <span className="ml-2 text-xs text-blue-600 font-bold">
-                                                        {formatPrice(precioBase)}
+                                                    <span className="ml-2 text-[10px] text-blue-600 font-bold">
+                                                        <br></br> {formatPrice(precioBase)}
                                                     </span>
                                                 )}
                                                 {productoEncontrado && !mostrarPrecio && (
                                                     <span className="ml-2 text-[10px] text-gray-400">
-                                                        (click)
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
 
                                         {/* Cantidad Devuelta - Input */}
-                                        <td className="px-2 py-2 text-center">
+                                        <td className="px-2 py-1 text-center">
                                             <input
                                                 type="number"
                                                 value={cantidadDevuelta || ''}
                                                 onChange={(e) => handleCantidadDevueltaChange(fila.id, e.target.value)}
-                                                className={`w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : 'border-gray-300'
+                                                className={`w-16 px-2 py-1 text-center text-black text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : 'border-gray-300'
                                                     }`}
                                                 min="0"
                                                 placeholder="0"
@@ -276,34 +263,17 @@ export default function Tabla({
                                         </td>
 
                                         {/* Resta (Cantidad Vendida) - Solo lectura */}
-                                        <td className="px-2 py-2 text-center">
+                                        <td className="px-2 py-1 text-center">
                                             <span className={`text-sm font-bold ${tieneStock ? 'text-blue-600' : 'text-gray-400'}`}>
                                                 {productoEncontrado ? formatNumber(cantidadVendida) : '-'}
                                             </span>
                                         </td>
 
                                         {/* Total - Solo lectura */}
-                                        <td className="px-2 py-2 text-right">
+                                        <td className="px-2 py-1 text-right">
                                             <span className={`font-bold ${tieneStock ? 'text-green-600' : 'text-gray-400'}`}>
                                                 {productoEncontrado ? formatPrice(total) : '-'}
                                             </span>
-                                        </td>
-
-                                        {/* Acción - Eliminar */}
-                                        <td className="px-2 py-2 text-center">
-                                            <button
-                                                onClick={() => eliminarFila(fila.id)}
-                                                disabled={esUnicaFila}
-                                                className={`p-1 rounded transition-colors ${esUnicaFila
-                                                    ? 'text-gray-300 cursor-not-allowed'
-                                                    : 'text-red-400 hover:text-red-600 hover:bg-red-50'
-                                                    }`}
-                                                title={esUnicaFila ? 'Debe haber al menos una fila' : 'Eliminar fila'}
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
                                         </td>
                                     </motion.tr>
                                 );

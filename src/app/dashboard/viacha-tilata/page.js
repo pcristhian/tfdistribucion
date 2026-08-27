@@ -28,14 +28,10 @@ const VIACHA_TILATA = [
     { id: 13, codigo: 'T20', precio_base: 19 },
     { id: 14, codigo: 'T30', precio_base: 29 },
     { id: 15, codigo: 'T50', precio_base: 47.50 },
-    { id: 16, codigo: 'T100', precio_base: 95 },
 
     // Chips
-    { id: 17, codigo: 'CHE', precio_base: 0 },
-    { id: 18, codigo: 'CHT', precio_base: 0 },
-    { id: 19, codigo: 'CHV', precio_base: 0 },
-    { id: 20, codigo: 'CHEB', precio_base: 0 },
-    { id: 21, codigo: 'CHTB', precio_base: 0 },
+    { id: 17, codigo: 'CHE#', precio_base: 12 },
+    { id: 18, codigo: 'CHEB', precio_base: 15 },
 ];
 
 export default function ViachaTilata() {
@@ -82,11 +78,11 @@ export default function ViachaTilata() {
     return (
         <div className="min-h-screen bg-gray-50">
             <Header titulo="Viacha - Tilata" />
-            <main className="max-w-7xl mx-auto px-4 py-6">
+            <main className="max-w-7xl mx-auto px-1 py-1">
                 {/* Tabla de productos */}
                 <Tabla
                     productos={productos}
-                    titulo="Productos en Stock"
+                    titulo="Ajuste de Tarjetas"
                 />
 
             </main>
