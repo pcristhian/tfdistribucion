@@ -11,20 +11,52 @@ export default function Tabla({
     const [filas, setFilas] = useState([]);
     const [nextId, setNextId] = useState(1);
 
-    // Estado para cantidades y códigos por fila
-    const [cantidades, setCantidades] = useState({});
-    const [codigos, setCodigos] = useState({});
+    // Estado para cantidades
+    const [cantidadesIniciales, setCantidadesIniciales] = useState({});
+    const [cantidadesDevueltas, setCantidadesDevueltas] = useState({});
     const [productosSeleccionados, setProductosSeleccionados] = useState({});
 
-    // Inicializar con 2 filas vacías
+    // Estado para mostrar precio base al hacer clic
+    const [precioVisible, setPrecioVisible] = useState({});
+
+    // Inicializar con TODOS los productos disponibles
     useEffect(() => {
-        const initialFilas = [
-            { id: 1, productoId: null },
-            { id: 2, productoId: null }
-        ];
-        setFilas(initialFilas);
-        setNextId(3);
-    }, []);
+        if (productos.length > 0) {
+            const initialFilas = productos.map((producto, index) => ({
+                id: index + 1,
+                productoId: producto.id
+            }));
+            setFilas(initialFilas);
+            setNextId(productos.length + 1);
+
+            // Inicializar los estados
+            const initialCantidadesIniciales = {};
+            const initialCantidadesDevueltas = {};
+            const initialProductosSeleccionados = {};
+
+            productos.forEach((producto, index) => {
+                const id = index + 1;
+                initialCantidadesIniciales[id] = 0;
+                initialCantidadesDevueltas[id] = 0;
+                initialProductosSeleccionados[id] = producto.id;
+            });
+
+            setCantidadesIniciales(initialCantidadesIniciales);
+            setCantidadesDevueltas(initialCantidadesDevueltas);
+            setProductosSeleccionados(initialProductosSeleccionados);
+        } else {
+            // Si no hay productos, mostrar 2 filas vacías como fallback
+            const initialFilas = [
+                { id: 1, productoId: null },
+                { id: 2, productoId: null }
+            ];
+            setFilas(initialFilas);
+            setNextId(3);
+            setCantidadesIniciales({});
+            setCantidadesDevueltas({});
+            setProductosSeleccionados({});
+        }
+    }, [productos]);
 
     // Formatear números
     const formatPrice = (value) => {
@@ -35,88 +67,58 @@ export default function Tabla({
         return parseInt(value || 0).toLocaleString('es-BO');
     };
 
-    // Obtener producto por código
-    const getProductoPorCodigo = (codigo) => {
-        if (!codigo) return null;
-        return productos.find(p =>
-            p.codigo && p.codigo.toLowerCase() === codigo.toLowerCase()
-        );
-    };
-
-    // Obtener precio según cantidad y límite
-    const getPrecioActual = (producto, cantidad) => {
-        if (!producto) return 0;
-        const precioBase = producto.precio_base || 0;
-        const limite = producto.limite || 0;
-        const precioPostLimite = producto.precio_post_limite || precioBase;
-
-        if (!limite || limite === 0 || cantidad < limite) {
-            return precioBase;
-        }
-        return precioPostLimite;
-    };
-
-    // Calcular total de una fila
-    const calcularTotalFila = (filaId) => {
-        const cantidad = cantidades[filaId] || 0;
-        const productoId = productosSeleccionados[filaId];
-        const producto = productos.find(p => p.id === productoId);
-
-        if (!producto || !cantidad) return 0;
-        const precioActual = getPrecioActual(producto, cantidad);
-        return cantidad * precioActual;
-    };
-
-    // Verificar si alcanzó el límite
-    const alcanzoLimite = (filaId) => {
-        const cantidad = cantidades[filaId] || 0;
-        const productoId = productosSeleccionados[filaId];
-        const producto = productos.find(p => p.id === productoId);
-
-        if (!producto) return false;
-        const limite = producto.limite || 0;
-        return limite > 0 && cantidad >= limite;
-    };
-
-    // Obtener producto de una fila
+    // Obtener producto por ID
     const getProductoFila = (filaId) => {
         const productoId = productosSeleccionados[filaId];
         return productos.find(p => p.id === productoId);
     };
 
-    // Manejar cambio de código
-    const handleCodigoChange = (filaId, value) => {
-        setCodigos(prev => ({
-            ...prev,
-            [filaId]: value
-        }));
-
-        // Buscar producto por código
-        const producto = getProductoPorCodigo(value);
-        if (producto) {
-            setProductosSeleccionados(prev => ({
-                ...prev,
-                [filaId]: producto.id
-            }));
-            // Inicializar cantidad en 0
-            setCantidades(prev => ({
-                ...prev,
-                [filaId]: 0
-            }));
-        } else {
-            setProductosSeleccionados(prev => ({
-                ...prev,
-                [filaId]: null
-            }));
-        }
+    // Obtener precio base del producto (sin límites)
+    const getPrecioBase = (producto) => {
+        if (!producto) return 0;
+        return producto.precio_base || 0;
     };
 
-    // Manejar cambio de cantidad
-    const handleCantidadChange = (filaId, value) => {
+    // Calcular cantidad vendida (inicial - devuelta)
+    const getCantidadVendida = (filaId) => {
+        const inicial = cantidadesIniciales[filaId] || 0;
+        const devuelta = cantidadesDevueltas[filaId] || 0;
+        return Math.max(0, inicial - devuelta);
+    };
+
+    // Calcular total de una fila
+    const calcularTotalFila = (filaId) => {
+        const cantidadVendida = getCantidadVendida(filaId);
+        const producto = getProductoFila(filaId);
+
+        if (!producto || !cantidadVendida) return 0;
+        const precioBase = getPrecioBase(producto);
+        return cantidadVendida * precioBase;
+    };
+
+    // Manejar cambio de cantidad inicial
+    const handleCantidadInicialChange = (filaId, value) => {
         const numValue = parseInt(value) || 0;
-        setCantidades(prev => ({
+        setCantidadesIniciales(prev => ({
             ...prev,
             [filaId]: numValue
+        }));
+    };
+
+    // Manejar cambio de cantidad devuelta
+    const handleCantidadDevueltaChange = (filaId, value) => {
+        const numValue = parseInt(value) || 0;
+        setCantidadesDevueltas(prev => ({
+            ...prev,
+            [filaId]: numValue
+        }));
+    };
+
+    // Manejar clic en el código para mostrar/ocultar precio
+    const handleCodigoClick = (filaId) => {
+        setPrecioVisible(prev => ({
+            ...prev,
+            [filaId]: !prev[filaId]
         }));
     };
 
@@ -129,22 +131,26 @@ export default function Tabla({
     // Eliminar fila
     const eliminarFila = (filaId) => {
         if (filas.length <= 1) {
-            // Esto no debería pasar porque el botón está deshabilitado, pero por seguridad
             return;
         }
         setFilas(prev => prev.filter(f => f.id !== filaId));
         // Limpiar estados
-        setCodigos(prev => {
+        setCantidadesIniciales(prev => {
             const newState = { ...prev };
             delete newState[filaId];
             return newState;
         });
-        setCantidades(prev => {
+        setCantidadesDevueltas(prev => {
             const newState = { ...prev };
             delete newState[filaId];
             return newState;
         });
         setProductosSeleccionados(prev => {
+            const newState = { ...prev };
+            delete newState[filaId];
+            return newState;
+        });
+        setPrecioVisible(prev => {
             const newState = { ...prev };
             delete newState[filaId];
             return newState;
@@ -156,15 +162,15 @@ export default function Tabla({
         return sum + calcularTotalFila(fila.id);
     }, 0);
 
-    // Calcular cantidad total
-    const cantidadTotal = filas.reduce((sum, fila) => {
-        return sum + (cantidades[fila.id] || 0);
+    // Calcular cantidad total vendida
+    const cantidadTotalVendida = filas.reduce((sum, fila) => {
+        return sum + getCantidadVendida(fila.id);
     }, 0);
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {/* Título */}
-            <div className="px-1 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
                 <span className="text-xs text-gray-500">
                     {filas.length} productos
@@ -176,19 +182,22 @@ export default function Tabla({
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th className="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Cód
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Cant. Inicial
                             </th>
-                            <th className="px-1 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Cant
+                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Código
                             </th>
-                            <th className="px-1 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Precio
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Cant. Devuelta
                             </th>
-                            <th className="px-1 py-1 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Vendidas
+                            </th>
+                            <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Total
                             </th>
-                            <th className="px-1 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Acción
                             </th>
                         </tr>
@@ -196,16 +205,16 @@ export default function Tabla({
                     <tbody className="divide-y divide-gray-100">
                         <AnimatePresence>
                             {filas.map((fila, index) => {
-                                const cantidad = cantidades[fila.id] || 0;
-                                const codigo = codigos[fila.id] || '';
+                                const cantidadInicial = cantidadesIniciales[fila.id] || 0;
+                                const cantidadDevuelta = cantidadesDevueltas[fila.id] || 0;
+                                const cantidadVendida = getCantidadVendida(fila.id);
                                 const producto = getProductoFila(fila.id);
-                                const precioActual = producto ? getPrecioActual(producto, cantidad) : 0;
+                                const precioBase = getPrecioBase(producto);
                                 const total = calcularTotalFila(fila.id);
-                                const tieneStock = cantidad > 0;
-                                const enLimite = alcanzoLimite(fila.id);
-                                const tieneLimite = producto?.limite && producto?.limite > 0;
+                                const tieneStock = cantidadVendida > 0;
                                 const productoEncontrado = !!producto;
                                 const esUnicaFila = filas.length === 1;
+                                const mostrarPrecio = precioVisible[fila.id] || false;
 
                                 return (
                                     <motion.tr
@@ -214,77 +223,74 @@ export default function Tabla({
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: -10 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`hover:bg-gray-50 transition-colors text-black ${tieneStock ? 'bg-green-50/30' : ''}`}
+                                        className={`hover:bg-gray-50 transition-colors ${tieneStock ? 'bg-green-50/30' : ''}`}
                                     >
-                                        {/* Código - Input editable */}
-                                        <td className="px-1 py-1 text-black">
-                                            <input
-                                                type="text"
-                                                value={codigo}
-                                                onChange={(e) => handleCodigoChange(fila.id, e.target.value)}
-                                                className={`w-15 px-1 py-1 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${productoEncontrado ? 'border-green-400 bg-green-50' : 'border-gray-300'
-                                                    }`}
-                                                placeholder="Ej:V10"
-                                                autoFocus={index === 0}
-                                            />
-                                            {!productoEncontrado && codigo && (
-                                                <div className="text-[10px] text-red-500 mt-0.5">
-                                                    Producto no encontrado
-                                                </div>
-                                            )}
-                                        </td>
-                                        {/* Cantidad - Input editable */}
-                                        <td className="px-1 py-1 text-center text-black">
+                                        {/* Cantidad Inicial - Input */}
+                                        <td className="px-2 py-2 text-center">
                                             <input
                                                 type="number"
-                                                value={cantidad || ''}
-                                                onChange={(e) => handleCantidadChange(fila.id, e.target.value)}
-                                                className={`w-15 px-1 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${enLimite ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
-                                                    } ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                value={cantidadInicial || ''}
+                                                onChange={(e) => handleCantidadInicialChange(fila.id, e.target.value)}
+                                                className={`w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : 'border-gray-300'
+                                                    }`}
                                                 min="0"
                                                 placeholder="0"
                                                 disabled={!productoEncontrado}
                                             />
-                                            {/* {enLimite && productoEncontrado && (
-                                                <div className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                                                    ✅ Límite alcanzado
-                                                </div>
-                                            )} */}
                                         </td>
 
-                                        {/* Precio Unitario */}
-                                        <td className="px-1 py-1 text-center">
-                                            <div className="flex flex-col items-center">
-                                                <span className={`text-sm font-bold ${enLimite ? 'text-amber-600' : 'text-gray-700'
-                                                    } ${!productoEncontrado ? 'text-gray-400' : ''}`}>
-                                                    {productoEncontrado ? formatPrice(precioActual) : '-'}
+                                        {/* Código - Click para mostrar precio */}
+                                        <td className="px-2 py-2">
+                                            <div
+                                                className="cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors inline-block"
+                                                onClick={() => handleCodigoClick(fila.id)}
+                                            >
+                                                <span className={`font-mono text-sm font-medium ${productoEncontrado ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                    {productoEncontrado ? producto.codigo : '-'}
                                                 </span>
-                                                {enLimite && tieneLimite && productoEncontrado && (
-                                                    <span className="text-[10px] text-gray-400 line-through">
-                                                        {formatPrice(producto.precio_base)}
+                                                {productoEncontrado && mostrarPrecio && (
+                                                    <span className="ml-2 text-xs text-blue-600 font-bold">
+                                                        {formatPrice(precioBase)}
                                                     </span>
                                                 )}
-                                                {tieneLimite && !enLimite && cantidad > 0 && productoEncontrado && (
-                                                    <span className="text-[10px] text-gray-400">
-                                                        Faltan {formatNumber(producto.limite - cantidad)} para límite
+                                                {productoEncontrado && !mostrarPrecio && (
+                                                    <span className="ml-2 text-[10px] text-gray-400">
+                                                        (click)
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
-                                        {/* Total - Cálculo en tiempo real */}
-                                        <td className="px-1 py-1 text-right">
-                                            <span className={`font-bold ${tieneStock ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                {productoEncontrado ? formatPrice(total) : '-'}
-                                            </span>
-                                            {enLimite && tieneLimite && productoEncontrado && (
-                                                <div className="text-[10px] text-green-600">
-                                                    Ahorro: {formatPrice(cantidad * (producto.precio_base - producto.precio_post_limite))}
-                                                </div>
-                                            )}
+
+                                        {/* Cantidad Devuelta - Input */}
+                                        <td className="px-2 py-2 text-center">
+                                            <input
+                                                type="number"
+                                                value={cantidadDevuelta || ''}
+                                                onChange={(e) => handleCantidadDevueltaChange(fila.id, e.target.value)}
+                                                className={`w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : 'border-gray-300'
+                                                    }`}
+                                                min="0"
+                                                placeholder="0"
+                                                disabled={!productoEncontrado}
+                                            />
                                         </td>
 
-                                        {/* Acción - Eliminar (deshabilitado si es la única fila) */}
-                                        <td className="px-1 py-2 text-center">
+                                        {/* Resta (Cantidad Vendida) - Solo lectura */}
+                                        <td className="px-2 py-2 text-center">
+                                            <span className={`text-sm font-bold ${tieneStock ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                {productoEncontrado ? formatNumber(cantidadVendida) : '-'}
+                                            </span>
+                                        </td>
+
+                                        {/* Total - Solo lectura */}
+                                        <td className="px-2 py-2 text-right">
+                                            <span className={`font-bold ${tieneStock ? 'text-green-600' : 'text-gray-400'}`}>
+                                                {productoEncontrado ? formatPrice(total) : '-'}
+                                            </span>
+                                        </td>
+
+                                        {/* Acción - Eliminar */}
+                                        <td className="px-2 py-2 text-center">
                                             <button
                                                 onClick={() => eliminarFila(fila.id)}
                                                 disabled={esUnicaFila}
@@ -298,42 +304,14 @@ export default function Tabla({
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                 </svg>
                                             </button>
-                                            {esUnicaFila && (
-                                                <div className="text-[8px] text-gray-400 mt-0.5">
-                                                    Mínimo 1
-                                                </div>
-                                            )}
                                         </td>
                                     </motion.tr>
                                 );
                             })}
                         </AnimatePresence>
                     </tbody>
-                    {/* Footer con totales y botón agregar */}
-                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                        <tr>
-                            <td colSpan="6" className="px-4 py-3">
-                                <button
-                                    onClick={agregarFila}
-                                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <span className="text-lg">+</span>
-                                    Agregar producto
-                                </button>
-                            </td>
-                        </tr>
-                        <tr className="font-bold">
-                            <td className="px-4 py-3 text-gray-600" colSpan="2">
-                                Totales
-                            </td>
-                            <td className="px-4 py-3 text-right text-blue-600 text-base">
-                                {formatPrice(totalGeneral)}
-                            </td>
-                        </tr>
-                    </tfoot>
                 </table>
             </div>
-
         </div>
     );
 }
