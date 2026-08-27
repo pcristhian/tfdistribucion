@@ -28,10 +28,12 @@ const VIACHA_TILATA = [
     { id: 13, codigo: 'T20', precio_base: 19 },
     { id: 14, codigo: 'T30', precio_base: 29 },
     { id: 15, codigo: 'T50', precio_base: 47.50 },
-
     // Chips
-    { id: 17, codigo: 'CHE#', precio_base: 12 },
-    { id: 18, codigo: 'CHEB', precio_base: 15 },
+    { id: 16, codigo: 'RE', precio_base: 1 },
+    { id: 17, codigo: 'RP', precio_base: 1 },
+    { id: 18, codigo: 'CHE#', precio_base: 12 },
+    { id: 19, codigo: 'CHEB', precio_base: 15 },
+    { id: 20, codigo: 'RV', precio_base: 1 },
 ];
 
 export default function ViachaTilata() {

@@ -15,14 +15,18 @@ export default function Tabla({
     const [cantidadesIniciales, setCantidadesIniciales] = useState({});
     const [cantidadesDevueltas, setCantidadesDevueltas] = useState({});
     const [productosSeleccionados, setProductosSeleccionados] = useState({});
+    const [codigosBusqueda, setCodigosBusqueda] = useState({});
 
     // Estado para mostrar precio base al hacer clic
     const [precioVisible, setPrecioVisible] = useState({});
 
-    // Inicializar con TODOS los productos disponibles
+    // Inicializar con los primeros 15 productos
     useEffect(() => {
         if (productos.length > 0) {
-            const initialFilas = productos.map((producto, index) => ({
+            // Mostrar solo los primeros 15 productos
+            const productosMostrar = productos.slice(0, 15);
+
+            const initialFilas = productosMostrar.map((producto, index) => ({
                 id: index + 1,
                 productoId: producto.id
             }));
@@ -33,17 +37,20 @@ export default function Tabla({
             const initialCantidadesIniciales = {};
             const initialCantidadesDevueltas = {};
             const initialProductosSeleccionados = {};
+            const initialCodigosBusqueda = {};
 
-            productos.forEach((producto, index) => {
+            productosMostrar.forEach((producto, index) => {
                 const id = index + 1;
                 initialCantidadesIniciales[id] = 0;
                 initialCantidadesDevueltas[id] = 0;
                 initialProductosSeleccionados[id] = producto.id;
+                initialCodigosBusqueda[id] = producto.codigo || '';
             });
 
             setCantidadesIniciales(initialCantidadesIniciales);
             setCantidadesDevueltas(initialCantidadesDevueltas);
             setProductosSeleccionados(initialProductosSeleccionados);
+            setCodigosBusqueda(initialCodigosBusqueda);
         } else {
             // Si no hay productos, mostrar 2 filas vacías como fallback
             const initialFilas = [
@@ -55,6 +62,7 @@ export default function Tabla({
             setCantidadesIniciales({});
             setCantidadesDevueltas({});
             setProductosSeleccionados({});
+            setCodigosBusqueda({});
         }
     }, [productos]);
 
@@ -71,6 +79,14 @@ export default function Tabla({
     const getProductoFila = (filaId) => {
         const productoId = productosSeleccionados[filaId];
         return productos.find(p => p.id === productoId);
+    };
+
+    // Obtener producto por código
+    const getProductoPorCodigo = (codigo) => {
+        if (!codigo) return null;
+        return productos.find(p =>
+            p.codigo && p.codigo.toLowerCase() === codigo.toLowerCase()
+        );
     };
 
     // Obtener precio base del producto (sin límites)
@@ -114,6 +130,37 @@ export default function Tabla({
         }));
     };
 
+    // Manejar cambio de código de búsqueda
+    const handleCodigoBusquedaChange = (filaId, value) => {
+        setCodigosBusqueda(prev => ({
+            ...prev,
+            [filaId]: value
+        }));
+
+        // Buscar producto por código
+        const producto = getProductoPorCodigo(value);
+        if (producto) {
+            setProductosSeleccionados(prev => ({
+                ...prev,
+                [filaId]: producto.id
+            }));
+            // Inicializar cantidades en 0
+            setCantidadesIniciales(prev => ({
+                ...prev,
+                [filaId]: 0
+            }));
+            setCantidadesDevueltas(prev => ({
+                ...prev,
+                [filaId]: 0
+            }));
+        } else {
+            setProductosSeleccionados(prev => ({
+                ...prev,
+                [filaId]: null
+            }));
+        }
+    };
+
     // Manejar clic en el código para mostrar/ocultar precio
     const handleCodigoClick = (filaId) => {
         setPrecioVisible(prev => ({
@@ -126,6 +173,11 @@ export default function Tabla({
     const agregarFila = () => {
         setFilas(prev => [...prev, { id: nextId, productoId: null }]);
         setNextId(prev => prev + 1);
+        // Inicializar el código de búsqueda vacío
+        setCodigosBusqueda(prev => ({
+            ...prev,
+            [nextId]: ''
+        }));
     };
 
     // Eliminar fila
@@ -151,6 +203,11 @@ export default function Tabla({
             return newState;
         });
         setPrecioVisible(prev => {
+            const newState = { ...prev };
+            delete newState[filaId];
+            return newState;
+        });
+        setCodigosBusqueda(prev => {
             const newState = { ...prev };
             delete newState[filaId];
             return newState;
@@ -188,6 +245,9 @@ export default function Tabla({
                             <th className="px-2 py-2 text-right text-xs font-medium text-gray-500  tracking-wider">
                                 Total
                             </th>
+                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
+                                Acción
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -203,6 +263,9 @@ export default function Tabla({
                                 const productoEncontrado = !!producto;
                                 const esUnicaFila = filas.length === 1;
                                 const mostrarPrecio = precioVisible[fila.id] || false;
+                                const codigoBusqueda = codigosBusqueda[fila.id] || '';
+                                // Verificar si es una fila de los primeros 15 (id <= 15)
+                                const esFilaInicial = fila.id <= 15;
 
                                 return (
                                     <motion.tr
@@ -229,23 +292,37 @@ export default function Tabla({
 
                                         {/* Código - Click para mostrar precio */}
                                         <td className="px-1 py-1">
-                                            <div
-                                                className="cursor-pointer hover:bg-gray-100 rounded leading-1.5 transition-colors inline-block"
-                                                onClick={() => handleCodigoClick(fila.id)}
-                                            >
-                                                <span className={`font-mono text-sm font-medium ${productoEncontrado ? 'text-gray-800' : 'text-gray-400'}`}>
-                                                    {productoEncontrado ? producto.codigo : '-'}
-                                                </span>
-                                                {productoEncontrado && mostrarPrecio && (
-                                                    <span className="ml-2 text-[10px] text-blue-600 font-bold">
-                                                        <br></br> {formatPrice(precioBase)}
+                                            {esFilaInicial ? (
+                                                <div
+                                                    className="cursor-pointer hover:bg-gray-100 rounded leading-1.5 transition-colors inline-block"
+                                                    onClick={() => handleCodigoClick(fila.id)}
+                                                >
+                                                    <span className={`font-mono text-sm font-medium ${productoEncontrado ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                        {productoEncontrado ? producto.codigo : '-'}
                                                     </span>
-                                                )}
-                                                {productoEncontrado && !mostrarPrecio && (
-                                                    <span className="ml-2 text-[11px] text-gray-400">
-                                                    </span>
-                                                )}
-                                            </div>
+                                                    {productoEncontrado && mostrarPrecio && (
+                                                        <span className="ml-2 text-[10px] text-blue-600 font-bold">
+                                                            <br></br> {formatPrice(precioBase)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <input
+                                                        type="text"
+                                                        value={codigoBusqueda}
+                                                        onChange={(e) => handleCodigoBusquedaChange(fila.id, e.target.value)}
+                                                        className={`w-12 px-1 py-0.5 text-black text-sm font-mono border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${productoEncontrado ? 'border-green-400 bg-green-50' : 'border-gray-300'
+                                                            }`}
+                                                        placeholder="Código"
+                                                    />
+                                                    {!productoEncontrado && codigoBusqueda && (
+                                                        <div className="text-[9px] text-red-500 mt-0.5">
+                                                            No encontrado
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </td>
 
                                         {/* Cantidad Devuelta - Input */}
@@ -254,7 +331,7 @@ export default function Tabla({
                                                 type="number"
                                                 value={cantidadDevuelta || ''}
                                                 onChange={(e) => handleCantidadDevueltaChange(fila.id, e.target.value)}
-                                                className={`w-16 px-2 py-1 text-center text-black text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : 'border-gray-300'
+                                                className={`w-10 px-2 py-1 text-center text-black text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${!productoEncontrado ? 'opacity-50 cursor-not-allowed' : 'border-gray-300'
                                                     }`}
                                                 min="0"
                                                 placeholder="0"
@@ -275,11 +352,54 @@ export default function Tabla({
                                                 {productoEncontrado ? formatPrice(total) : '-'}
                                             </span>
                                         </td>
+
+                                        {/* Acción - Eliminar */}
+                                        <td className="px-2 py-1 text-center">
+                                            <button
+                                                onClick={() => eliminarFila(fila.id)}
+                                                disabled={esUnicaFila}
+                                                className={`p-1 rounded transition-colors ${esUnicaFila
+                                                    ? 'text-gray-300 cursor-not-allowed'
+                                                    : 'text-red-400 hover:text-red-600 hover:bg-red-50'
+                                                    }`}
+                                                title={esUnicaFila ? 'Debe haber al menos una fila' : 'Eliminar fila'}
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </td>
                                     </motion.tr>
                                 );
                             })}
                         </AnimatePresence>
                     </tbody>
+                    {/* Footer con totales y botón agregar */}
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                        <tr>
+                            <td colSpan="6" className="px-4 py-2">
+                                <button
+                                    onClick={agregarFila}
+                                    className="w-full py-1.5 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <span className="text-lg">+</span>
+                                    Agregar producto
+                                </button>
+                            </td>
+                        </tr>
+                        <tr className="font-bold">
+                            <td className="px-2 py-3 text-gray-600 text-center" colSpan="3">
+                                Total Ventas
+                            </td>
+                            <td className="px-2 py-3 text-center text-blue-600">
+                                {formatNumber(cantidadTotalVendida)}
+                            </td>
+                            <td className="px-2 py-3 text-right text-green-600 text-base">
+                                {formatPrice(totalGeneral)}
+                            </td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
