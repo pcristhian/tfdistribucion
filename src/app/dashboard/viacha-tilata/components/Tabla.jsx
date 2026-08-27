@@ -176,10 +176,10 @@ export default function Tabla({
                             <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
                                 Sa. Inicial
                             </th>
-                            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500  tracking-wider">
+                            <th className="px-1 py-2 text-left text-xs font-medium text-gray-500  tracking-wider">
                                 Código
                             </th>
-                            <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
+                            <th className="px-1 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
                                 Sa. Final
                             </th>
                             <th className="px-2 py-2 text-center text-xs font-medium text-gray-500  tracking-wider">
@@ -228,9 +228,9 @@ export default function Tabla({
                                         </td>
 
                                         {/* Código - Click para mostrar precio */}
-                                        <td className="px-2 py-1">
+                                        <td className="px-1 py-1">
                                             <div
-                                                className="cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors inline-block"
+                                                className="cursor-pointer hover:bg-gray-100 rounded leading-1.5 transition-colors inline-block"
                                                 onClick={() => handleCodigoClick(fila.id)}
                                             >
                                                 <span className={`font-mono text-sm font-medium ${productoEncontrado ? 'text-gray-800' : 'text-gray-400'}`}>
@@ -242,14 +242,14 @@ export default function Tabla({
                                                     </span>
                                                 )}
                                                 {productoEncontrado && !mostrarPrecio && (
-                                                    <span className="ml-2 text-[10px] text-gray-400">
+                                                    <span className="ml-2 text-[11px] text-gray-400">
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
 
                                         {/* Cantidad Devuelta - Input */}
-                                        <td className="px-2 py-1 text-center">
+                                        <td className="px-1 py-1 text-center">
                                             <input
                                                 type="number"
                                                 value={cantidadDevuelta || ''}
